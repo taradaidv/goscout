@@ -48,6 +48,13 @@ func getConfigFilePath() (string, error) {
 }
 
 func LoadConfig() (*Config, error) {
+	defaultConfig := &Config{
+		WindowWidth:  800.0,
+		WindowHeight: 600.0,
+		SplitOffset:  0.3,
+		OpenTabs:     []string{},
+	}
+
 	configFilePath, err := getConfigFilePath()
 	if err != nil {
 		return nil, err
@@ -56,26 +63,22 @@ func LoadConfig() (*Config, error) {
 	file, err := os.Open(configFilePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return &Config{
-				WindowWidth:  800.0,
-				WindowHeight: 600.0,
-				SplitOffset:  0.3,
-			}, nil
+			return defaultConfig, nil
 		}
-
-		return nil, errors.Wrap(err, "opening config file")
+		return nil, errors.New("opening config file")
 	}
 	defer file.Close()
 
-	config := &Config{}
-	err = json.NewDecoder(file).Decode(config)
-	if err == nil {
-		if config.SplitOffset == 0 {
-			config.SplitOffset = 0.3
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(defaultConfig)
+	if err != nil {
+		if errors.Is(err, os.ErrInvalid) || err.Error() == "EOF" {
+			return defaultConfig, nil
 		}
+		return nil, errors.New("decoding config file")
 	}
 
-	return config, nil
+	return defaultConfig, nil
 }
 
 func SaveConfig(config *Config) error {
@@ -302,16 +305,19 @@ func (e *saveSSHconfig) TypedShortcut(shortcut fyne.Shortcut) {
 		if sc.KeyName == fyne.KeyS && (sc.Modifier == fyne.KeyModifierControl || sc.Modifier == fyne.KeyModifierSuper) {
 			file, err := os.OpenFile(e.cfgFile, os.O_TRUNC|os.O_WRONLY, 0)
 			if err != nil {
-				fmt.Println("Error opening file:", err)
+				log.Fatal(err)
 				return
 			}
-			defer file.Close()
 
 			_, err = file.WriteString(e.Text)
 			if err != nil {
-				fmt.Println("Error writing to file:", err)
+				log.Fatal(err)
 				return
 			}
+			file.Close()
+			e.ui.updateHosts()
+			e.ui.ToggleContent()
+
 			content := container.NewVBox(
 				widget.NewLabel("✅ The SSH client configuration file has been saved."),
 				widget.NewLabel("Stay trendy, move away from passwords."),
@@ -319,10 +325,7 @@ func (e *saveSSHconfig) TypedShortcut(shortcut fyne.Shortcut) {
 				layout.NewSpacer(),
 			)
 			dialog.ShowCustom("SSH config", "OK", content, e.ui.fyneWindow)
-			e.ui.fyneSelect.Selected = ""
-			e.ui.fyneSelect.Refresh()
-			e.ui.ToggleContent()
-			e.ui.updateHosts()
+
 		}
 	}
 	e.Entry.TypedShortcut(shortcut)
@@ -347,10 +350,7 @@ func (ui *UI) ToggleContent() {
 }
 
 func fetchResponseBody(webEntry string) (*http.Response, error) {
-	link, err := url.Parse("https://" + webEntry)
-	if err != nil {
-		return nil, fmt.Errorf("invalid URL: %w", err)
-	}
+	link := parseURL("https://" + webEntry)
 	httpClient := &http.Client{
 		Timeout: 5 * time.Second,
 	}
@@ -389,53 +389,63 @@ func parseURL(urlStr string) *url.URL {
 }
 
 func (ui *UI) CreateConnectionContent() *fyne.Container {
+	ui.updateTagLabel()
+	ui.updateContentContainer()
+	return container.NewBorder(ui.fyneSelect, ui.tagLabel, nil, nil, ui.contentContainer)
+}
 
-	resp, err := fetchResponseBody("api.github.com/repos/" + ui.repo + "/tags")
-	if err == nil {
-		tag, _ := processTags(resp.Body)
-		if tag != ui.ver {
-			ui.tagLabel = widget.NewRichText(
-				&widget.TextSegment{Text: "current version " + ui.ver + " / available new version " + tag + ""},
-				&widget.HyperlinkSegment{Text: ui.repo, URL: parseURL("https://github.com/" + ui.repo)},
-			)
-		} else {
-			ui.tagLabel = widget.NewRichText(
-				&widget.TextSegment{Text: ui.ver},
-				&widget.HyperlinkSegment{Text: ui.repo, URL: parseURL("https://github.com/" + ui.repo)},
-			)
-		}
+func (ui *UI) updateTagLabel() {
+	resp, _ := fetchResponseBody("api.github.com/repos/" + ui.repo + "/tags")
+	defer resp.Body.Close()
+
+	tag, _ := processTags(resp.Body)
+	if tag == "" {
+		tag = "on-prem mode"
+	}
+	if tag != ui.ver && tag != "on-prem mode" && tag != "" {
+
+		ui.tagLabel = widget.NewRichText(
+			&widget.TextSegment{Text: "current version " + ui.ver + " / available " + tag},
+			&widget.HyperlinkSegment{Text: ui.repo, URL: parseURL("https://github.com/" + ui.repo)},
+		)
 	} else {
 		ui.tagLabel = widget.NewRichText(
-			&widget.TextSegment{Text: "v0.0.0-on-prem"},
+			&widget.TextSegment{Text: tag},
 			&widget.HyperlinkSegment{Text: ui.repo, URL: parseURL("https://github.com/" + ui.repo)},
 		)
 	}
+}
 
-	resp, err = fetchResponseBody("raw.githubusercontent.com/" + ui.repo + "/main/docs/images/GoScout.png")
+func (ui *UI) updateContentContainer() {
+	resp, err := fetchResponseBody("raw.githubusercontent.com/" + ui.repo + "/main/docs/images/GoScout.png")
 	if err != nil {
-		ui.fyneImg = nil
-		ui.label = widget.NewLabelWithStyle("GoScout ❤️s you - support the project development", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
-		ui.contentContainer = container.NewStack(ui.sshConfigEditor, container.NewCenter(ui.label))
-		ui.sshConfigEditor.Hide()
-		ui.label.SetText("v0.1.0-alpha")
-		return container.NewBorder(ui.fyneSelect, ui.tagLabel, nil, nil, ui.contentContainer)
+		ui.setDefaultContentContainer()
+		return
 	}
+
 	img, err := png.Decode(resp.Body)
 	if err != nil {
-		ui.fyneImg = nil
-		ui.label = widget.NewLabelWithStyle("GoScout ❤️s you - support the project development", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
-		ui.contentContainer = container.NewStack(ui.sshConfigEditor, container.NewCenter(ui.label))
-		ui.sshConfigEditor.Hide()
-		ui.label.Show()
-	} else {
-		ui.fyneImg = canvas.NewImageFromImage(img)
-		ui.fyneImg.FillMode = canvas.ImageFillContain
-		ui.contentContainer = container.NewStack(ui.sshConfigEditor, ui.fyneImg)
-		ui.sshConfigEditor.Hide()
-		ui.fyneImg.Show()
+		ui.setDefaultContentContainer()
+		return
 	}
-	defer resp.Body.Close()
-	return container.NewBorder(ui.fyneSelect, ui.tagLabel, nil, nil, ui.contentContainer)
+
+	ui.fyneImg = canvas.NewImageFromImage(img)
+	ui.fyneImg.FillMode = canvas.ImageFillContain
+
+	ui.fyneImg.SetMinSize(fyne.NewSize(300, 300))
+	imageContainer := container.NewVBox(layout.NewSpacer(), ui.fyneImg)
+
+	ui.contentContainer = container.NewStack(ui.sshConfigEditor, imageContainer)
+	ui.sshConfigEditor.Hide()
+	ui.label.Show()
+}
+
+func (ui *UI) setDefaultContentContainer() {
+	ui.fyneImg = nil
+	ui.label = widget.NewLabelWithStyle("GoScout ❤️s you - support the project development", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
+	ui.contentContainer = container.NewStack(ui.sshConfigEditor, container.NewCenter(ui.label))
+	ui.sshConfigEditor.Hide()
+	ui.label.Show()
 }
 
 func newCustomMultiLineEntry(ui *UI) *customMultiLineEntry {

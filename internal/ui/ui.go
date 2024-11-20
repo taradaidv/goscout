@@ -2,7 +2,10 @@ package ui
 
 import (
 	"fmt"
+	"io"
 	"log"
+	"os"
+	"path/filepath"
 
 	"goscout/internal/scoutssh"
 
@@ -44,14 +47,14 @@ type UI struct {
 }
 
 func (ui *UI) updateHosts() {
-	hosts, cfgFile, err := scoutssh.GetSSHHosts()
+	hosts, err := scoutssh.GetSSHHosts()
 	if err != nil {
 		log.Fatal(err)
 	}
-	hosts = append(hosts, "[edit ➜ "+cfgFile.Name()+"]")
+	hosts = append(hosts, "[edit ➜ ~/.ssh/config]")
 	ui.fyneSelect.Options = hosts
 	ui.fyneSelect.PlaceHolder = "lineup of available hosts"
-	cfgFile.Close()
+	ui.fyneSelect.Refresh()
 }
 
 func SetupWindow(fyneWindow fyne.Window, cfg *Config) {
@@ -85,8 +88,6 @@ func SetupWindow(fyneWindow fyne.Window, cfg *Config) {
 		),
 	))
 
-	ui.updateHosts()
-
 	ui.fyneWindow.Resize(fyne.NewSize(ui.cfg.WindowWidth, ui.cfg.WindowHeight))
 	ui.fyneWindow.CenterOnScreen()
 
@@ -98,27 +99,26 @@ func SetupWindow(fyneWindow fyne.Window, cfg *Config) {
 	connectionTab.Icon = theme.ComputerIcon()
 
 	if len(ui.fyneTabs.Items) == 0 {
-		_, cfgFile, err := scoutssh.GetSSHHosts()
+		ui.updateHosts()
+		file, err := os.Open(filepath.Join(os.Getenv("HOME"), ".ssh", "config"))
 		if err != nil {
 			log.Fatal(err)
 		}
-		cfgFile.Seek(0, 0)
-		buffer := make([]byte, 1024)
-		defer cfgFile.Close()
+		defer file.Close()
 
-		n, err := cfgFile.Read(buffer)
-		if err != nil {
-			if err.Error() != "EOF" {
-				fmt.Println("Error reading file:", err)
-			}
+		buffer := make([]byte, 1024)
+		n, err := file.Read(buffer)
+		if err != nil && err != io.EOF {
+			log.Fatalln("EOF", err)
 		}
 
-		ui.sshConfigEditor = actionSSHconfig(ui, cfgFile.Name())
+		ui.sshConfigEditor = actionSSHconfig(ui, file.Name())
 		ui.sshConfigEditor.SetText(string(buffer[:n]))
 
 		connectionTab.Content = ui.CreateConnectionContent()
 		ui.fyneTabs.Append(connectionTab)
 	}
+
 	ui.fyneWindow.SetContent(ui.fyneTabs)
 
 	ui.fyneWindow.SetOnClosed(func() {

@@ -10,41 +10,36 @@ import (
 	"path/filepath"
 
 	"github.com/kevinburke/ssh_config"
-	"github.com/pkg/errors"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
 )
 
-func GetSSHHosts() ([]string, *os.File, error) {
+func GetSSHHosts() ([]string, error) {
 	sshConfigPath := filepath.Join(os.Getenv("HOME"), ".ssh", "config")
 
 	file, err := os.Open(sshConfigPath)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "opening SSH configuration")
+		return nil, fmt.Errorf("opening SSH configuration: %w", err)
 	}
+	defer file.Close()
+
 	configFile := bufio.NewReader(file)
 	cfg, err := ssh_config.Decode(configFile)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "parsing SSH configuration")
+		return nil, fmt.Errorf("parsing SSH configuration: %w", err)
 	}
 
 	var hosts []string
 	for _, host := range cfg.Hosts {
 		for _, pattern := range host.Patterns {
 			hostName := pattern.String()
-			if isSpecificHost(hostName) && hasUserDirective(hostName) {
+			if isSpecificHost(hostName) {
 				hosts = append(hosts, hostName)
 			}
 		}
 	}
-
-	return hosts, file, nil
-}
-
-func hasUserDirective(hostName string) bool {
-	user := ssh_config.Get(hostName, "User")
-	return user != ""
+	return hosts, nil
 }
 
 func isSpecificHost(host string) bool {
@@ -57,12 +52,11 @@ func isSpecificHost(host string) bool {
 }
 
 func ConnectAndListFiles(host, path string) (*sftp.Client, *ssh.Client, map[string][]FileInfo, error) {
-	sshConfigPath := filepath.Join(os.Getenv("HOME"), ".ssh", "config")
-	configFile, err := os.Open(sshConfigPath)
+	configFile, err := os.Open(filepath.Join(os.Getenv("HOME"), ".ssh", "config"))
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to open SSH configuration: %w", err)
 	}
-
+	defer configFile.Close()
 	cfg, err := ssh_config.Decode(configFile)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to parse SSH configuration: %w", err)
