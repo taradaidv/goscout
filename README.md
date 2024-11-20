@@ -27,7 +27,7 @@ The GoScout is a tool with a UI for efficient and secure remote host management 
 
 ```
 git clone https://github.com/taradaidv/goscout.git
-cd goscout ; go build -o goscout cmd/goscout.go
+cd goscout ; go build .
 ./goscout
 ```
 
