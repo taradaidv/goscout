@@ -372,7 +372,7 @@ func (ui *UI) CreateConnectionContent() *fyne.Container {
 		ui.label.Show()
 	} else {
 		ui.fyneImg = canvas.NewImageFromImage(img)
-		ui.fyneImg.FillMode = canvas.ImageFillContain
+		ui.fyneImg.FillMode = canvas.ImageFillOriginal
 		ui.contentContainer = container.NewStack(ui.sshConfigEditor, ui.fyneImg)
 		ui.sshConfigEditor.Hide()
 		ui.fyneImg.Show()
