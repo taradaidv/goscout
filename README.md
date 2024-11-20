@@ -31,6 +31,14 @@ cd goscout ; go build -o goscout cmd/goscout.go
 ./goscout
 ```
 
+## Persistent installation ~/go/bin and Run 
+
+```
+git clone https://github.com/taradaidv/goscout.git
+cd goscout ; go install .
+goscout
+```
+
 ## TODO
 There are lots of great things that could be added to this app.
 Already planned is:
