@@ -1,7 +1,5 @@
 
-<p align="center">
-  <img src="docs/images/GoScout.png" alt="GoScout" width="20%">
-</p>
+<p align="center"><img src="docs/images/GoScout.png" alt="GoScout" width="20%"></p>
 
 # GoScout
 
@@ -13,12 +11,9 @@ The GoScout is a tool with a UI for efficient and secure remote host management 
 [![Go](https://img.shields.io/badge/Go-100%25-brightgreen)](https://golang.org)
 [![Code Status](https://img.shields.io/badge/Code%20Status-active-brightgreen.svg)](https://github.com/taradaidv/goscout/tree/main)
 
-<p align="center">
-  <img src="docs/images/screenshot.png" alt="GoScout">
-</p>
+<br><p align="center"><img src="docs/images/screenshot.png" alt="GoScout"></p>
 
 ## Features
-
 - **Security**: Utilizes SSH and exclusively certificates for reliable and secure connections.
 - **Jump Hosts**: Supports connections through jump hosts for more complex network setups.
 - **Minimalism**: Lightweight and fast to use, without unnecessary bloat.
