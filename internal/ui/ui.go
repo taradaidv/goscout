@@ -92,7 +92,7 @@ func SetupWindow(fyneWindow fyne.Window, cfg *Config) {
 	ui.fyneWindow.CenterOnScreen()
 
 	ui.fyneSelect.OnChanged = func(selected string) {
-		ui.connectToHost(selected)
+		go ui.connectToHost(selected)
 	}
 
 	connectionTab := container.NewTabItem("Hosts", nil)
@@ -136,7 +136,7 @@ func SetupWindow(fyneWindow fyne.Window, cfg *Config) {
 	ui.fyneTabs.OnSelected = func(tab *container.TabItem) {}
 
 	for _, host := range ui.cfg.OpenTabs {
-		ui.connectToHost(host)
+		go ui.connectToHost(host)
 	}
 
 	if len(ui.fyneTabs.Items) > 0 {
@@ -145,7 +145,7 @@ func SetupWindow(fyneWindow fyne.Window, cfg *Config) {
 }
 
 func (ui *UI) connectToHost(host string) *container.TabItem {
-
+	ui.fyneSelect.Selected = ""
 	if ui.fyneSelect.Options[len(ui.fyneSelect.Options)-1] == host {
 		ui.ToggleContent()
 		return nil
