@@ -350,7 +350,7 @@ func (ui *UI) CreateConnectionContent() *fyne.Container {
 		Timeout: 2 * time.Second,
 	}
 
-	req, err := http.NewRequest("GET", "https://github.com/taradaidv/goscout/blob/main/docs/images/GoScout.png", nil)
+	req, err := http.NewRequest("GET", "https://raw.githubusercontent.com/taradaidv/goscout/refs/heads/main/docs/images/GoScout.png", nil)
 	if err == nil {
 		req.Header.Set("User-Agent", "GoScout")
 	}
