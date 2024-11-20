@@ -10,7 +10,7 @@ import (
 
 	"goscout/internal/scoutssh"
 	"image/color"
-	"image/jpeg"
+	"image/png"
 	"log"
 	"os"
 	"path/filepath"
@@ -347,10 +347,10 @@ func (ui *UI) ToggleContent() {
 
 func (ui *UI) CreateConnectionContent() *fyne.Container {
 	httpClient := &http.Client{
-		Timeout: 2 * time.Second,
+		Timeout: 5 * time.Second,
 	}
 
-	req, err := http.NewRequest("GET", "https://raw.githubusercontent.com/taradaidv/goscout/refs/heads/main/docs/images/GoScout.png", nil)
+	req, err := http.NewRequest("GET", "https://raw.githubusercontent.com/taradaidv/goscout/main/docs/images/app.png", nil)
 	if err == nil {
 		req.Header.Set("User-Agent", "GoScout")
 	}
@@ -363,9 +363,7 @@ func (ui *UI) CreateConnectionContent() *fyne.Container {
 		ui.label.Show()
 		return container.NewBorder(ui.fyneSelect, nil, nil, nil, ui.contentContainer)
 	}
-	defer resp.Body.Close()
-
-	img, err := jpeg.Decode(resp.Body)
+	img, err := png.Decode(resp.Body)
 	if err != nil {
 		ui.fyneImg = nil
 		ui.label = widget.NewLabelWithStyle("GoScout ❤️s you - support the project development", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
@@ -379,7 +377,7 @@ func (ui *UI) CreateConnectionContent() *fyne.Container {
 		ui.sshConfigEditor.Hide()
 		ui.fyneImg.Show()
 	}
-
+	defer resp.Body.Close()
 	return container.NewBorder(ui.fyneSelect, nil, nil, nil, ui.contentContainer)
 }
 
