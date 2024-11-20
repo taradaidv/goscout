@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 	"unicode/utf8"
 
@@ -345,23 +346,79 @@ func (ui *UI) ToggleContent() {
 	}
 }
 
-func (ui *UI) CreateConnectionContent() *fyne.Container {
+func fetchResponseBody(webEntry string) (*http.Response, error) {
+	link, err := url.Parse("https://" + webEntry)
+	if err != nil {
+		return nil, fmt.Errorf("invalid URL: %w", err)
+	}
 	httpClient := &http.Client{
 		Timeout: 5 * time.Second,
 	}
 
-	req, err := http.NewRequest("GET", "https://raw.githubusercontent.com/taradaidv/goscout/main/docs/images/GoScout.png", nil)
+	req, err := http.NewRequest("GET", link.String(), nil)
 	if err == nil {
 		req.Header.Set("User-Agent", "GoScout")
 	}
 	resp, err := httpClient.Do(req)
+
+	return resp, err
+}
+
+type Tag struct {
+	Name string `json:"name"`
+}
+
+func processTags(body io.ReadCloser) (string, error) {
+	defer body.Close()
+
+	var tags []Tag
+	if err := json.NewDecoder(body).Decode(&tags); err != nil {
+		return "", err
+	}
+
+	if len(tags) == 0 {
+		return "", fmt.Errorf("no tags found")
+	}
+
+	return tags[len(tags)-1].Name, nil
+}
+
+func parseURL(urlStr string) *url.URL {
+	parsedURL, _ := url.Parse(urlStr)
+	return parsedURL
+}
+
+func (ui *UI) CreateConnectionContent() *fyne.Container {
+
+	resp, err := fetchResponseBody("api.github.com/repos/" + ui.repo + "/tags")
+	if err == nil {
+		tag, _ := processTags(resp.Body)
+		if tag != ui.ver {
+			ui.tagLabel = widget.NewRichText(
+				&widget.TextSegment{Text: "current version " + ui.ver + " / available new version " + tag + ""},
+				&widget.HyperlinkSegment{Text: ui.repo, URL: parseURL("https://github.com/" + ui.repo)},
+			)
+		} else {
+			ui.tagLabel = widget.NewRichText(
+				&widget.TextSegment{Text: ui.ver},
+				&widget.HyperlinkSegment{Text: ui.repo, URL: parseURL("https://github.com/" + ui.repo)},
+			)
+		}
+	} else {
+		ui.tagLabel = widget.NewRichText(
+			&widget.TextSegment{Text: "v0.0.0-on-prem"},
+			&widget.HyperlinkSegment{Text: ui.repo, URL: parseURL("https://github.com/" + ui.repo)},
+		)
+	}
+
+	resp, err = fetchResponseBody("raw.githubusercontent.com/" + ui.repo + "/main/docs/images/GoScout.png")
 	if err != nil {
 		ui.fyneImg = nil
 		ui.label = widget.NewLabelWithStyle("GoScout ❤️s you - support the project development", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
 		ui.contentContainer = container.NewStack(ui.sshConfigEditor, container.NewCenter(ui.label))
 		ui.sshConfigEditor.Hide()
-		ui.label.Show()
-		return container.NewBorder(ui.fyneSelect, nil, nil, nil, ui.contentContainer)
+		ui.label.SetText("v0.1.0-alpha")
+		return container.NewBorder(ui.fyneSelect, ui.tagLabel, nil, nil, ui.contentContainer)
 	}
 	img, err := png.Decode(resp.Body)
 	if err != nil {
@@ -378,7 +435,7 @@ func (ui *UI) CreateConnectionContent() *fyne.Container {
 		ui.fyneImg.Show()
 	}
 	defer resp.Body.Close()
-	return container.NewBorder(ui.fyneSelect, nil, nil, nil, ui.contentContainer)
+	return container.NewBorder(ui.fyneSelect, ui.tagLabel, nil, nil, ui.contentContainer)
 }
 
 func newCustomMultiLineEntry(ui *UI) *customMultiLineEntry {

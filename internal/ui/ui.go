@@ -23,6 +23,8 @@ type TreeObject struct {
 	FileInfo   scoutssh.FileInfo
 }
 type UI struct {
+	repo             string
+	ver              string
 	fyneWindow       fyne.Window
 	fyneSelect       *widget.Select
 	fyneTabs         *container.DocTabs
@@ -38,6 +40,7 @@ type UI struct {
 	contentContainer *fyne.Container
 	fyneImg          *canvas.Image
 	label            *widget.Label
+	tagLabel         *widget.RichText
 }
 
 func (ui *UI) updateHosts() {
@@ -53,6 +56,8 @@ func (ui *UI) updateHosts() {
 
 func SetupWindow(fyneWindow fyne.Window, cfg *Config) {
 	ui := &UI{
+		repo:             "taradaidv/goscout",
+		ver:              "v0.1.0-alpha",
 		fyneWindow:       fyneWindow,
 		fyneSelect:       widget.NewSelect(nil, nil),
 		fyneTabs:         &container.DocTabs{},
@@ -66,6 +71,9 @@ func SetupWindow(fyneWindow fyne.Window, cfg *Config) {
 		entryFiles:       map[int]*widget.Entry{},
 		sshConfigEditor:  &saveSSHconfig{},
 		contentContainer: &fyne.Container{},
+		fyneImg:          &canvas.Image{},
+		label:            &widget.Label{},
+		tagLabel:         &widget.RichText{},
 	}
 
 	defer ui.fyneWindow.Close()

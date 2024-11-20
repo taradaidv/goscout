@@ -8,7 +8,9 @@
 GoScout is a tool with a UI for efficient and secure remote host management using key-based authentication. It's fully written in Go and requires no additional software installation.
 
 
+[![Go](https://img.shields.io/badge/Go-1.23-blue)](https://golang.org)
 [![Telegram](https://img.shields.io/badge/Telegram-Message-blue)](https://t.me/taradaidv)
+[![Go](https://img.shields.io/badge/Go-100%25-brightgreen)](https://golang.org)
 [![Code Status](https://img.shields.io/badge/Code%20Status-active-brightgreen.svg)](https://github.com/taradaidv/goscout/tree/main)
 ## Features
 
@@ -17,6 +19,7 @@ GoScout is a tool with a UI for efficient and secure remote host management usin
 - **Minimalism**: Lightweight and fast to use, without unnecessary bloat.
 - **Remembers state**: Keeps track of window size and last active tabs so you can continue working in your familiar environment.
 - **UI**: [Fyne.io](https://fyne.io) UI toolkit is being used.
+- **Hotkeys**: Text tweaked in the SSH config and file editor gets saved with the hotkeys CMD+S or CTRL+S.
 - **Tabs**: Supports multiple tabs, allowing you to manage several sessions or files simultaneously.
 - **Go**: Fully written in Go, ensuring high performance, reliability, and cross-platform compatibility.
 
