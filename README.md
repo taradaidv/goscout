@@ -14,7 +14,7 @@ The GoScout is a tool with a UI for efficient and secure remote host management 
 <br><p align="center"><img src="docs/images/screenshot.png" alt="GoScout"></p>
 
 ## Features
-- **Security**: Utilizes SSH and exclusively certificates for reliable and secure connections.
+- **Security**: Uses SSH and SFTP with private keys for secure and reliable connections.
 - **Jump Hosts**: Supports connections through jump hosts for more complex network setups.
 - **Minimalism**: Lightweight and fast to use, without unnecessary bloat.
 - **Remembers state**: Keeps track of window size and last active tabs so you can continue working in your familiar environment.
