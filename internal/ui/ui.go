@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"goscout/internal/scoutssh"
 
@@ -240,6 +241,28 @@ type UIComponents struct {
 	Term            fyne.CanvasObject
 }
 
+func getPreviousDirectory(path string) string {
+	if path == "./" || path == "." {
+		return "./"
+	}
+
+	if strings.HasSuffix(path, "/") {
+		path = strings.TrimSuffix(path, "/")
+	} else {
+		lastSlashIndex := strings.LastIndex(path, "/")
+		if lastSlashIndex != -1 {
+			path = path[:lastSlashIndex]
+		}
+	}
+
+	lastSlashIndex := strings.LastIndex(path, "/")
+	if lastSlashIndex == -1 {
+		return "/"
+	}
+
+	return path[:lastSlashIndex+1]
+}
+
 func (ui *UI) components(params UIParams) (fyne.CanvasObject, fyne.CanvasObject) {
 	toolbar := widget.NewToolbar(
 		widget.NewToolbarAction(theme.HomeIcon(), func() {
@@ -249,7 +272,10 @@ func (ui *UI) components(params UIParams) (fyne.CanvasObject, fyne.CanvasObject)
 			params.EntryFile.OnSubmitted("/")
 		}),
 		widget.NewToolbarAction(theme.MoveUpIcon(), func() {
-			params.EntryFile.OnSubmitted(params.EntryFile.Text + "/..")
+			path := getPreviousDirectory((params.EntryFile.Text))
+			params.EntryFile.SetText(path)
+			params.EntryFile.OnSubmitted(path)
+
 		}),
 	)
 

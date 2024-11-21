@@ -36,10 +36,12 @@ func (m *MouseDetectingLabel) MouseUp(e *desktop.MouseEvent) {}
 func (m *MouseDetectingLabel) MouseDown(e *desktop.MouseEvent) {
 	switch e.Button {
 	case desktop.MouseButtonPrimary:
-		m.entryFile.SetText(m.path)
+
 		if m.isBranch {
+			m.entryFile.SetText(m.path + "/")
 			m.entryFile.OnSubmitted(m.path)
 		} else {
+			m.entryFile.SetText(m.path)
 			m.handleSelection()
 		}
 
