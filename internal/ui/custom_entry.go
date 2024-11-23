@@ -417,7 +417,7 @@ func (ui *UI) updateTagLabel() {
 }
 
 func (ui *UI) updateContentContainer() {
-	resp, err := fetchResponseBody("raw.githubusercontent.com/" + ui.repo + "/main/docs/images/GoScout.svg")
+	resp, err := fetchResponseBody("raw.githubusercontent.com/" + ui.repo + "/main/docs/images/GoScout.png")
 	if err != nil {
 		ui.setDefaultContentContainer()
 		return
