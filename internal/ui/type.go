@@ -34,6 +34,8 @@ type UI struct {
 	fyneImg          *canvas.Image
 	label            *widget.Label
 	tagLabel         *widget.RichText
+	logsLabel        *widget.Label
+	content          *fyne.Container
 }
 
 type UIParams struct {

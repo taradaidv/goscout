@@ -28,7 +28,9 @@ const (
 func (ui *UI) updateHosts() {
 	hosts, err := scoutssh.GetSSHHosts()
 	if err != nil {
-		log.Fatal(err)
+
+		dialog.ShowError(err, ui.fyneWindow)
+		ui.fyneWindow.Close()
 	}
 	hosts = append(hosts, "[edit ➜ ~/.ssh/config]")
 	ui.fyneSelect.Options = hosts
@@ -54,6 +56,7 @@ func SetupWindow(fyneWindow fyne.Window, cfg *Config) {
 		fyneImg:          &canvas.Image{},
 		label:            &widget.Label{},
 		tagLabel:         &widget.RichText{},
+		logsLabel:        &widget.Label{},
 	}
 
 	defer ui.fyneWindow.Close()
@@ -130,25 +133,26 @@ func (ui *UI) connectToHost(host string) *container.TabItem {
 
 	sftpClient, sshClient, treeData, err := scoutssh.ConnectAndListFiles(host, ".")
 	if err != nil {
-		dialog.ShowError(err, ui.fyneWindow)
+		ui.log(host, err.Error())
 		return nil
 	}
 
 	if sftpClient == nil || sshClient == nil {
-		ui.notifyError("Failed to establish connection")
+		ui.log(host, "client nil")
 		return nil
 	}
 
 	defer func() {
 		if err != nil {
+			ui.log(host, err.Error())
 			sftpClient.Close()
 			sshClient.Close()
 		}
 	}()
 
-	_, _, _, t, err := ui.setupSSHSession(sshClient)
+	_, _, _, t, err := ui.setupSSHSession(host, sshClient)
 	if err != nil {
-		ui.notifyError(err.Error())
+		ui.log(host, err.Error())
 		return nil
 	}
 

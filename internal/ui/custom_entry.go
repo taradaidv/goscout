@@ -107,8 +107,6 @@ func (ui *UI) saveFile() {
 	defer file.Close()
 
 	content := entryText.Text
-	ui.notifyError(fmt.Sprintf("Writing content to %s: %s\n", filePath, content))
-
 	_, err = file.Write([]byte(content))
 	if err != nil {
 		ui.notifyError(fmt.Sprintf("Failed to write to file: %v", err))
@@ -124,7 +122,7 @@ func (ui *UI) saveFile() {
 	ui.notifySuccess("File saved successfully")
 }
 
-func (ui *UI) setupSSHSession(sshClient *ssh.Client) (*ssh.Session, io.WriteCloser, io.Reader, *terminal.Terminal, error) {
+func (ui *UI) setupSSHSession(host string, sshClient *ssh.Client) (*ssh.Session, io.WriteCloser, io.Reader, *terminal.Terminal, error) {
 	session, err := sshClient.NewSession()
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("failed to create session: %w", err)
@@ -146,14 +144,14 @@ func (ui *UI) setupSSHSession(sshClient *ssh.Client) (*ssh.Session, io.WriteClos
 
 	go func() {
 		if err := session.Shell(); err != nil {
-			ui.notifyError(err.Error())
+			ui.log(host, err.Error())
 		}
 	}()
 
 	t := terminal.New()
 	go func() {
 		if err := t.RunWithConnection(in, out); err != nil {
-			ui.notifyError(err.Error())
+			ui.log(host, err.Error())
 		}
 	}()
 
@@ -317,13 +315,13 @@ func (ui *UI) ToggleContent() {
 		if ui.fyneImg != nil {
 			ui.fyneImg.Show()
 		} else {
-			ui.label.Show()
+			ui.content.Show()
 		}
 	} else {
 		if ui.fyneImg != nil {
 			ui.fyneImg.Hide()
 		} else {
-			ui.label.Hide()
+			ui.content.Hide()
 		}
 		ui.sshConfigEditor.Show()
 	}
@@ -411,17 +409,22 @@ func (ui *UI) updateContentContainer() {
 	ui.fyneImg.SetMinSize(fyne.NewSize(300, 300))
 	imageContainer := container.NewVBox(layout.NewSpacer(), ui.fyneImg)
 
-	ui.contentContainer = container.NewStack(ui.sshConfigEditor, imageContainer)
+	ui.logsLabel.Wrapping = fyne.TextWrapWord
+
+	ui.content = container.NewBorder(nil, container.NewVBox(container.NewCenter(imageContainer)), nil, nil, container.NewVScroll(ui.logsLabel))
+
+	ui.contentContainer = container.NewStack(ui.sshConfigEditor, ui.content)
 	ui.sshConfigEditor.Hide()
 	ui.label.Show()
 }
 
 func (ui *UI) setDefaultContentContainer() {
-	ui.fyneImg = nil
 	ui.label = widget.NewLabelWithStyle("GoScout ❤️s you - support the project development", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
-	ui.contentContainer = container.NewStack(ui.sshConfigEditor, container.NewCenter(ui.label))
+	ui.logsLabel.Wrapping = fyne.TextWrapWord
+
+	ui.content = container.NewBorder(nil, container.NewVBox(container.NewCenter(ui.label)), nil, nil, container.NewVScroll(ui.logsLabel))
+	ui.contentContainer = container.NewStack(ui.content, ui.sshConfigEditor)
 	ui.sshConfigEditor.Hide()
-	ui.label.Show()
 }
 
 func newCustomMultiLineEntry(ui *UI) *customMultiLineEntry {
