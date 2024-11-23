@@ -41,6 +41,11 @@ cd goscout && go install . && goscout
 There are lots of great things that could be added to this app.
 Already planned is:
 
+*Legend*  
+⭕️ *abandoned*  
+🟢 *implemented*  
+⚪️ *developing* 
+
 |**Planned Feature**| **Progress**|
 |-|-|
 |Add Kubernetes support|-|
@@ -52,10 +57,6 @@ Already planned is:
 |Sync files and folders via native OS file manager|⚪️|
 |...|...|
 
-*Legend*  
-🟢 *implemented*  
-⚪️ *developing*  
-⭕️ *abandoned* 
 
 ## Support the project
 This small utility is just the beginning of a larger project, and we need your help to maintain and expand the entire infrastructure. Join us in building something great!
