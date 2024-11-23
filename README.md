@@ -11,17 +11,17 @@ The GoScout is a tool with a UI for efficient and secure remote host management 
 [![Go](https://img.shields.io/badge/Go-100%25-brightgreen)](https://golang.org)
 [![Code Status](https://img.shields.io/badge/Code%20Status-active-brightgreen.svg)](https://github.com/taradaidv/goscout/tree/main)
 
-<br><p align="center"><img src="docs/images/screenshot.png" alt="GoScout"></p>
+<p align="center"><img src="docs/images/screenshot.png" alt="GoScout"></p>
 
 ## Features
-- **Security**: Uses SSH and SFTP with private keys for secure and reliable connections.
+- **Go**: Fully written in Go, ensuring high performance, reliability, and cross-platform compatibility.
+- **Hotkeys**: Text tweaked in the SSH config and file editor gets saved with the hotkeys CMD+S or CTRL+S.
 - **Jump Hosts**: Supports connections through jump hosts for more complex network setups.
 - **Minimalism**: Lightweight and fast to use, without unnecessary bloat.
 - **Remembers state**: Keeps track of window size and last active tabs so you can continue working in your familiar environment.
-- **UI**: [Fyne.io](https://fyne.io) toolkit is being used.
-- **Hotkeys**: Text tweaked in the SSH config and file editor gets saved with the hotkeys CMD+S or CTRL+S.
+- **Security**: Uses SSH and SFTP with private keys for secure and reliable connections.
 - **Tabs**: Supports multiple tabs, allowing you to manage several sessions or files simultaneously.
-- **Go**: Fully written in Go, ensuring high performance, reliability, and cross-platform compatibility.
+- **UI**: [Fyne.io](https://fyne.io) toolkit is being used.
 
 ## Build and Run
 
@@ -41,21 +41,28 @@ cd goscout && go install . && goscout
 There are lots of great things that could be added to this app.
 Already planned is:
 
-* Scroll-back
-* Mouse actions
-* Follow symlinks
-* Integrate with IPFS
-* Add Kubernetes support
-* Download and upload folders and files.
-* Add support for automatic detection of the host list on Windows
-* And ...
+|**Planned Feature**| **Progress**|
+|-|-|
+|Add Kubernetes support|-|
+|Add support for detection of the host list on Windows|-|
+|Follow symlinks|⚪️|
+|Integrate with IPFS|-|
+|Mouse actions|🟢|
+|Scroll-back|⚪️|
+|Sync files and folders via native OS file manager|⚪️|
+|...|...|
 
----
+*Legend*  
+🟢 *implemented*  
+⚪️ *developing*  
+⭕️ *abandoned* 
+
+## Support the project
 This small utility is just the beginning of a larger project, and we need your help to maintain and expand the entire infrastructure. Join us in building something great!
 
 <p align="center">
   <img src="docs/images/TON.png" alt="GoScout" width="30%">
 
-  [TON Wallet address](https://ton.org)<br>
+  [TON Wallet address](https://ton.org)  
   UQDqFCrP01iTMfSFBHXFC-Q6S3CfsrCunVBy7DxWPYcxMsND
 </p>
