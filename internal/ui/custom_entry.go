@@ -405,7 +405,7 @@ func (ui *UI) updateTagLabel() {
 	if tag != ui.ver && tag != "on-prem mode" && tag != "" {
 
 		ui.tagLabel = widget.NewRichText(
-			&widget.TextSegment{Text: "current version " + ui.ver + " / available " + tag},
+			&widget.TextSegment{Text: "current version: " + ui.ver + " / main version: " + tag},
 			&widget.HyperlinkSegment{Text: ui.repo, URL: parseURL("https://github.com/" + ui.repo)},
 		)
 	} else {
