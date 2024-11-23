@@ -30,15 +30,6 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-type Config struct {
-	WindowWidth  float32 `json:"window_width"`
-	WindowHeight float32 `json:"window_height"`
-	SplitOffset  float64 `json:"split_offset"`
-	OpenTabs     []string
-}
-
-const configFile = ".goscout.json"
-
 func getConfigFilePath() (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -279,17 +270,6 @@ func isPrintable(r rune) bool {
 	return r == '\t' || r == '\n' || r == '\r' || (r >= ' ' && r <= '~') || (r > 127 && r != utf8.RuneError)
 }
 
-type customMultiLineEntry struct {
-	widget.Entry
-	ui *UI
-}
-
-type saveSSHconfig struct {
-	cfgFile string
-	widget.Entry
-	ui *UI
-}
-
 func actionSSHconfig(ui *UI, cfgFile string) *saveSSHconfig {
 	entry := &saveSSHconfig{
 		cfgFile: cfgFile,
@@ -364,10 +344,6 @@ func fetchResponseBody(webEntry string) (*http.Response, error) {
 	return resp, err
 }
 
-type Tag struct {
-	Name string `json:"name"`
-}
-
 func processTags(body io.ReadCloser) (string, error) {
 	defer body.Close()
 
@@ -395,29 +371,29 @@ func (ui *UI) CreateConnectionContent() *fyne.Container {
 }
 
 func (ui *UI) updateTagLabel() {
-	resp, _ := fetchResponseBody("api.github.com/repos/" + ui.repo + "/tags")
+	resp, _ := fetchResponseBody("api.github.com/repos/" + repo + "/tags")
 	defer resp.Body.Close()
 
 	tag, _ := processTags(resp.Body)
 	if tag == "" {
 		tag = "on-prem mode"
 	}
-	if tag != ui.ver && tag != "on-prem mode" && tag != "" {
+	if tag != ver && tag != "on-prem mode" && tag != "" {
 
 		ui.tagLabel = widget.NewRichText(
-			&widget.TextSegment{Text: "current version: " + ui.ver + " / main version: " + tag},
-			&widget.HyperlinkSegment{Text: ui.repo, URL: parseURL("https://github.com/" + ui.repo)},
+			&widget.TextSegment{Text: "current version: " + ver + " / main version: " + tag},
+			&widget.HyperlinkSegment{Text: repo, URL: parseURL("https://github.com/" + repo)},
 		)
 	} else {
 		ui.tagLabel = widget.NewRichText(
 			&widget.TextSegment{Text: tag},
-			&widget.HyperlinkSegment{Text: ui.repo, URL: parseURL("https://github.com/" + ui.repo)},
+			&widget.HyperlinkSegment{Text: repo, URL: parseURL("https://github.com/" + repo)},
 		)
 	}
 }
 
 func (ui *UI) updateContentContainer() {
-	resp, err := fetchResponseBody("raw.githubusercontent.com/" + ui.repo + "/main/docs/images/GoScout.png")
+	resp, err := fetchResponseBody("raw.githubusercontent.com/" + repo + "/main/docs/images/GoScout.png")
 	if err != nil {
 		ui.setDefaultContentContainer()
 		return
@@ -465,12 +441,6 @@ func (e *customMultiLineEntry) TypedShortcut(shortcut fyne.Shortcut) {
 	e.Entry.TypedShortcut(shortcut)
 }
 
-type ClickInterceptor struct {
-	widget.BaseWidget
-	ui *UI
-	t  *terminal.Terminal
-}
-
 func NewClickInterceptor(ui *UI, t *terminal.Terminal) *ClickInterceptor {
 	ci := &ClickInterceptor{ui: ui, t: t}
 	ci.ExtendBaseWidget(ci)
@@ -485,10 +455,6 @@ func (ci *ClickInterceptor) CreateRenderer() fyne.WidgetRenderer {
 // Invisible area click for boost terminal swith
 func (ci *ClickInterceptor) Tapped(*fyne.PointEvent) {
 	ci.ui.fyneWindow.Canvas().Focus(ci.t)
-}
-
-type clickInterceptorRenderer struct {
-	rect *canvas.Rectangle
 }
 
 func (r *clickInterceptorRenderer) Layout(size fyne.Size) {

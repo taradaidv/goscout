@@ -1,5 +1,5 @@
 
-<p align="center"><img src="docs/images/GoScout.svg" alt="GoScout" width="20%"></p>
+<p align="center"><img src="docs/images/GoScout.png" alt="GoScout" width="20%"></p>
 
 # GoScout
 
@@ -50,6 +50,7 @@ Already planned is:
 |-|-|
 |Add Kubernetes support|-|
 |Add support for detection of the host list on Windows|-|
+|connection process output in the app window|⚪️|
 |connection process output in the app window|⚪️|
 |Follow symlinks|⚪️|
 |Integrate with IPFS|-|

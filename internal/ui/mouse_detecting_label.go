@@ -9,15 +9,6 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-type MouseDetectingLabel struct {
-	widget.Label
-	path      string
-	isBranch  bool
-	entryFile *widget.Entry
-	entryText *customMultiLineEntry
-	ui        *UI
-}
-
 func NewMouseDetectingLabel(ui *UI, isBranch bool, entryFile *widget.Entry, entryText *customMultiLineEntry) *MouseDetectingLabel {
 	label := &MouseDetectingLabel{
 		Label:     *widget.NewLabel(""),

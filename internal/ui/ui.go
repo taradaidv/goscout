@@ -16,36 +16,14 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"github.com/fyne-io/terminal"
 	"github.com/pkg/sftp"
 )
 
-type TreeObject struct {
-	HeaderText string
-	Payload    string
-	Notes      string
-	FileInfo   scoutssh.FileInfo
-}
-type UI struct {
-	repo             string
-	ver              string
-	fyneWindow       fyne.Window
-	fyneSelect       *widget.Select
-	fyneTabs         *container.DocTabs
-	cfg              *Config
-	openTabs         []string
-	activeSFTP       map[int]*sftp.Client
-	list             *widget.List
-	ItemStore        map[string]*TreeObject
-	sideLabels       map[*container.TabItem]*widget.Label
-	entryTexts       map[int]*customMultiLineEntry
-	entryFiles       map[int]*widget.Entry
-	sshConfigEditor  *saveSSHconfig
-	contentContainer *fyne.Container
-	fyneImg          *canvas.Image
-	label            *widget.Label
-	tagLabel         *widget.RichText
-}
+const (
+	repo       = "taradaidv/goscout"
+	ver        = "v0.2.0-alpha"
+	configFile = ".goscout.json"
+)
 
 func (ui *UI) updateHosts() {
 	hosts, err := scoutssh.GetSSHHosts()
@@ -60,8 +38,6 @@ func (ui *UI) updateHosts() {
 
 func SetupWindow(fyneWindow fyne.Window, cfg *Config) {
 	ui := &UI{
-		repo:             "taradaidv/goscout",
-		ver:              "v0.1.0-alpha",
 		fyneWindow:       fyneWindow,
 		fyneSelect:       widget.NewSelect(nil, nil),
 		fyneTabs:         &container.DocTabs{},
@@ -223,22 +199,6 @@ func (ui *UI) connectToHost(host string) *container.TabItem {
 	ui.fyneTabs.Append(remoteTab)
 	ui.openTabs = append(ui.openTabs, host)
 	return remoteTab
-}
-
-type UIParams struct {
-	Terminal  *terminal.Terminal
-	TreeData  map[string][]scoutssh.FileInfo
-	EntryFile *widget.Entry
-	EntryText *customMultiLineEntry
-}
-
-type UIComponents struct {
-	Toolbar         *widget.Toolbar
-	LeftContent     fyne.CanvasObject
-	RightContent    fyne.CanvasObject
-	Overlay         *ClickInterceptor
-	TermWithOverlay fyne.CanvasObject
-	Term            fyne.CanvasObject
 }
 
 func getPreviousDirectory(path string) string {
