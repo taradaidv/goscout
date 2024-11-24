@@ -50,8 +50,7 @@ Already planned is:
 |-|-|
 |Add Kubernetes support|-|
 |Add support for detection of the host list on Windows|-|
-|connection process output in the app window|⚪️|
-|connection process output in the app window|⚪️|
+|Connection process output in the app window|🟢|
 |Follow symlinks|⚪️|
 |Integrate with IPFS|-|
 |Mouse actions|🟢|
