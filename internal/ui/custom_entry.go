@@ -11,7 +11,6 @@ import (
 
 	"goscout/internal/scoutssh"
 	"image/color"
-	"image/png"
 	"log"
 	"os"
 	"path/filepath"
@@ -293,7 +292,7 @@ func (e *saveSSHconfig) TypedShortcut(shortcut fyne.Shortcut) {
 				return
 			}
 			file.Close()
-			e.ui.updateHosts()
+			e.ui.SetHosts()
 			e.ui.ToggleContent()
 
 			content := container.NewVBox(
@@ -310,21 +309,30 @@ func (e *saveSSHconfig) TypedShortcut(shortcut fyne.Shortcut) {
 }
 
 func (ui *UI) ToggleContent() {
-	if ui.sshConfigEditor.Visible() {
-		ui.sshConfigEditor.Hide()
-		if ui.fyneImg != nil {
-			ui.fyneImg.Show()
-		} else {
-			ui.content.Show()
+
+	if ui.sshConfigEditor == nil {
+		file, err := os.Open(filepath.Join(os.Getenv("HOME"), ".ssh", "config"))
+		if err != nil {
+			log.Fatal(err)
 		}
+		defer file.Close()
+
+		buffer := make([]byte, 1024)
+		n, err := file.Read(buffer)
+		if err != nil && err != io.EOF {
+			log.Fatalln("EOF", err)
+		}
+
+		ui.sshConfigEditor = actionSSHconfig(ui, file.Name())
+		ui.sshConfigEditor.SetText(string(buffer[:n]))
+		ui.connectionTab.Content = container.NewBorder(container.NewVBox(ui.fyneSelect), nil, nil, nil, container.NewVScroll(ui.sshConfigEditor))
 	} else {
-		if ui.fyneImg != nil {
-			ui.fyneImg.Hide()
-		} else {
-			ui.content.Hide()
-		}
-		ui.sshConfigEditor.Show()
+		ui.sshConfigEditor = nil
+		fmt.Println("OK")
+		ui.connectionTab.Content = container.NewBorder(container.NewVBox(ui.fyneSelect), ui.bottomConnection, nil, nil, container.NewVScroll(ui.logsLabel))
+
 	}
+
 }
 
 func fetchResponseBody(webEntry string) (*http.Response, error) {
@@ -362,13 +370,7 @@ func parseURL(urlStr string) *url.URL {
 	return parsedURL
 }
 
-func (ui *UI) CreateConnectionContent() *fyne.Container {
-	ui.updateTagLabel()
-	ui.updateContentContainer()
-	return container.NewBorder(ui.fyneSelect, ui.tagLabel, nil, nil, ui.contentContainer)
-}
-
-func (ui *UI) updateTagLabel() {
+func (ui *UI) SetVersion() {
 	resp, _ := fetchResponseBody("api.github.com/repos/" + repo + "/tags")
 	defer resp.Body.Close()
 
@@ -388,43 +390,6 @@ func (ui *UI) updateTagLabel() {
 			&widget.HyperlinkSegment{Text: repo, URL: parseURL("https://github.com/" + repo)},
 		)
 	}
-}
-
-func (ui *UI) updateContentContainer() {
-	resp, err := fetchResponseBody("raw.githubusercontent.com/" + repo + "/main/docs/images/GoScout.png")
-	if err != nil {
-		ui.setDefaultContentContainer()
-		return
-	}
-
-	img, err := png.Decode(resp.Body)
-	if err != nil {
-		ui.setDefaultContentContainer()
-		return
-	}
-
-	ui.fyneImg = canvas.NewImageFromImage(img)
-	ui.fyneImg.FillMode = canvas.ImageFillContain
-
-	ui.fyneImg.SetMinSize(fyne.NewSize(300, 300))
-	imageContainer := container.NewVBox(layout.NewSpacer(), ui.fyneImg)
-
-	ui.logsLabel.Wrapping = fyne.TextWrapWord
-
-	ui.content = container.NewBorder(nil, container.NewVBox(container.NewCenter(imageContainer)), nil, nil, container.NewVScroll(ui.logsLabel))
-
-	ui.contentContainer = container.NewStack(ui.sshConfigEditor, ui.content)
-	ui.sshConfigEditor.Hide()
-	ui.label.Show()
-}
-
-func (ui *UI) setDefaultContentContainer() {
-	ui.label = widget.NewLabelWithStyle("GoScout ❤️s you - support the project development", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
-	ui.logsLabel.Wrapping = fyne.TextWrapWord
-
-	ui.content = container.NewBorder(nil, container.NewVBox(container.NewCenter(ui.label)), nil, nil, container.NewVScroll(ui.logsLabel))
-	ui.contentContainer = container.NewStack(ui.content, ui.sshConfigEditor)
-	ui.sshConfigEditor.Hide()
 }
 
 func newCustomMultiLineEntry(ui *UI) *customMultiLineEntry {

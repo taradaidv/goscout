@@ -32,10 +32,12 @@ type UI struct {
 	sshConfigEditor  *saveSSHconfig
 	contentContainer *fyne.Container
 	fyneImg          *canvas.Image
-	label            *widget.Label
+	banner           *widget.Label
 	tagLabel         *widget.RichText
 	logsLabel        *widget.Label
 	content          *fyne.Container
+	connectionTab    *container.TabItem
+	bottomConnection *fyne.Container
 }
 
 type UIParams struct {

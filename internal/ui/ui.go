@@ -2,10 +2,7 @@ package ui
 
 import (
 	"fmt"
-	"io"
-	"log"
-	"os"
-	"path/filepath"
+	"image/png"
 	"strings"
 
 	"goscout/internal/scoutssh"
@@ -25,7 +22,7 @@ const (
 	configFile = ".goscout.json"
 )
 
-func (ui *UI) updateHosts() {
+func (ui *UI) SetHosts() {
 	hosts, err := scoutssh.GetSSHHosts()
 	if err != nil {
 
@@ -38,6 +35,33 @@ func (ui *UI) updateHosts() {
 	ui.fyneSelect.Refresh()
 }
 
+func (ui *UI) setBottom() {
+	resp, _ := fetchResponseBody("raw.githubusercontent.com/" + repo + "/main/docs/images/TON.png")
+	img, err := png.Decode(resp.Body)
+	if err == nil {
+		ui.fyneImg = canvas.NewImageFromImage(img)
+		ui.fyneImg.FillMode = canvas.ImageFillContain
+		ui.fyneImg.SetMinSize(fyne.NewSize(72, 72))
+	} else {
+		ui.banner = widget.NewLabelWithStyle("GoScout ❤️s you", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
+		ui.logsLabel.Wrapping = fyne.TextWrapWord
+	}
+
+	ui.logsLabel.Wrapping = fyne.TextWrapWord
+	leftBottomContainer := container.NewBorder(
+		nil,
+		nil,
+		nil,
+		ui.tagLabel,
+	)
+
+	if err == nil {
+		ui.bottomConnection = container.NewBorder(nil, nil, leftBottomContainer, ui.fyneImg)
+	} else {
+		ui.bottomConnection = container.NewBorder(nil, nil, leftBottomContainer, ui.banner)
+	}
+
+}
 func SetupWindow(fyneWindow fyne.Window, cfg *Config) {
 	ui := &UI{
 		fyneWindow:       fyneWindow,
@@ -51,12 +75,15 @@ func SetupWindow(fyneWindow fyne.Window, cfg *Config) {
 		sideLabels:       map[*container.TabItem]*widget.Label{},
 		entryTexts:       map[int]*customMultiLineEntry{},
 		entryFiles:       map[int]*widget.Entry{},
-		sshConfigEditor:  &saveSSHconfig{},
+		sshConfigEditor:  nil,
 		contentContainer: &fyne.Container{},
 		fyneImg:          &canvas.Image{},
-		label:            &widget.Label{},
+		banner:           &widget.Label{},
 		tagLabel:         &widget.RichText{},
 		logsLabel:        &widget.Label{},
+		content:          &fyne.Container{},
+		connectionTab:    &container.TabItem{},
+		bottomConnection: &fyne.Container{},
 	}
 
 	defer ui.fyneWindow.Close()
@@ -75,28 +102,15 @@ func SetupWindow(fyneWindow fyne.Window, cfg *Config) {
 		go ui.connectToHost(selected)
 	}
 
-	connectionTab := container.NewTabItem("Hosts", nil)
-	connectionTab.Icon = theme.ComputerIcon()
+	ui.connectionTab = container.NewTabItem("Hosts", nil)
+	ui.connectionTab.Icon = theme.ComputerIcon()
 
 	if len(ui.fyneTabs.Items) == 0 {
-		ui.updateHosts()
-		file, err := os.Open(filepath.Join(os.Getenv("HOME"), ".ssh", "config"))
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer file.Close()
-
-		buffer := make([]byte, 1024)
-		n, err := file.Read(buffer)
-		if err != nil && err != io.EOF {
-			log.Fatalln("EOF", err)
-		}
-
-		ui.sshConfigEditor = actionSSHconfig(ui, file.Name())
-		ui.sshConfigEditor.SetText(string(buffer[:n]))
-
-		connectionTab.Content = ui.CreateConnectionContent()
-		ui.fyneTabs.Append(connectionTab)
+		ui.SetHosts()
+		ui.SetVersion()
+		ui.setBottom()
+		ui.connectionTab.Content = container.NewBorder(container.NewVBox(ui.fyneSelect), ui.bottomConnection, nil, nil, container.NewVScroll(ui.logsLabel))
+		ui.fyneTabs.Append(ui.connectionTab)
 	}
 
 	ui.fyneWindow.SetContent(ui.fyneTabs)
