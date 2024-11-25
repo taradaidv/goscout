@@ -36,14 +36,20 @@ func (ui *UI) SetHosts() {
 }
 
 func (ui *UI) setBottom() {
+
+	var (
+		fyneImg *canvas.Image
+		banner  *widget.Label
+	)
 	resp, _ := fetchResponseBody("raw.githubusercontent.com/" + repo + "/main/docs/images/TON.png")
 	img, err := png.Decode(resp.Body)
+
 	if err == nil {
-		ui.fyneImg = canvas.NewImageFromImage(img)
-		ui.fyneImg.FillMode = canvas.ImageFillContain
-		ui.fyneImg.SetMinSize(fyne.NewSize(72, 72))
+		fyneImg = canvas.NewImageFromImage(img)
+		fyneImg.FillMode = canvas.ImageFillContain
+		fyneImg.SetMinSize(fyne.NewSize(72, 72))
 	} else {
-		ui.banner = widget.NewLabelWithStyle("GoScout ❤️s you", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
+		banner = widget.NewLabelWithStyle("GoScout ❤️s you", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
 		ui.logsLabel.Wrapping = fyne.TextWrapWord
 	}
 
@@ -52,16 +58,17 @@ func (ui *UI) setBottom() {
 		nil,
 		nil,
 		nil,
-		ui.tagLabel,
+		ui.SetVersion(),
 	)
 
 	if err == nil {
-		ui.bottomConnection = container.NewBorder(nil, nil, leftBottomContainer, ui.fyneImg)
+		ui.bottomConnection = container.NewBorder(nil, nil, leftBottomContainer, fyneImg)
 	} else {
-		ui.bottomConnection = container.NewBorder(nil, nil, leftBottomContainer, ui.banner)
+		ui.bottomConnection = container.NewBorder(nil, nil, leftBottomContainer, banner)
 	}
-
+	ui.connectionTab.Content = container.NewBorder(container.NewVBox(ui.fyneSelect), ui.bottomConnection, nil, nil, container.NewVScroll(ui.logsLabel))
 }
+
 func SetupWindow(fyneWindow fyne.Window, cfg *Config) {
 	ui := &UI{
 		fyneWindow:       fyneWindow,
@@ -70,30 +77,17 @@ func SetupWindow(fyneWindow fyne.Window, cfg *Config) {
 		cfg:              cfg,
 		openTabs:         []string{},
 		activeSFTP:       make(map[int]*sftp.Client),
-		list:             &widget.List{},
 		ItemStore:        map[string]*TreeObject{},
-		sideLabels:       map[*container.TabItem]*widget.Label{},
 		entryTexts:       map[int]*customMultiLineEntry{},
 		entryFiles:       map[int]*widget.Entry{},
 		sshConfigEditor:  nil,
-		contentContainer: &fyne.Container{},
-		fyneImg:          &canvas.Image{},
-		banner:           &widget.Label{},
-		tagLabel:         &widget.RichText{},
 		logsLabel:        &widget.Label{},
-		content:          &fyne.Container{},
 		connectionTab:    &container.TabItem{},
 		bottomConnection: &fyne.Container{},
 	}
 
 	defer ui.fyneWindow.Close()
-	ui.fyneWindow.SetMainMenu(fyne.NewMainMenu(
-		fyne.NewMenu("GoScout",
-			fyne.NewMenuItem("Exit", func() {
-				ui.fyneWindow.Close()
-			}),
-		),
-	))
+	ui.fyneWindow.SetMainMenu(fyne.NewMainMenu())
 
 	ui.fyneWindow.Resize(fyne.NewSize(ui.cfg.WindowWidth, ui.cfg.WindowHeight))
 	ui.fyneWindow.CenterOnScreen()
@@ -106,11 +100,11 @@ func SetupWindow(fyneWindow fyne.Window, cfg *Config) {
 	ui.connectionTab.Icon = theme.ComputerIcon()
 
 	if len(ui.fyneTabs.Items) == 0 {
-		ui.SetHosts()
-		ui.SetVersion()
-		ui.setBottom()
-		ui.connectionTab.Content = container.NewBorder(container.NewVBox(ui.fyneSelect), ui.bottomConnection, nil, nil, container.NewVScroll(ui.logsLabel))
+		go ui.SetHosts()
+		go ui.setBottom()
+		ui.connectionTab.Content = container.NewBorder(container.NewVBox(ui.fyneSelect), nil, nil, nil, container.NewVScroll(ui.logsLabel))
 		ui.fyneTabs.Append(ui.connectionTab)
+
 	}
 
 	ui.fyneWindow.SetContent(ui.fyneTabs)
@@ -257,11 +251,9 @@ func (ui *UI) components(params UIParams) (fyne.CanvasObject, fyne.CanvasObject)
 		}),
 	)
 
-	ui.createList(params.TreeData, params.EntryFile, params.EntryText)
-
 	leftContent := container.NewBorder(
 		toolbar, nil, nil, nil,
-		container.NewVScroll(ui.list),
+		container.NewVScroll(ui.createList(params.TreeData, params.EntryFile, params.EntryText)),
 	)
 
 	overlay := NewClickInterceptor(ui, params.Terminal)

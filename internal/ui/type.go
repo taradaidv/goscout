@@ -24,18 +24,11 @@ type UI struct {
 	cfg              *Config
 	openTabs         []string
 	activeSFTP       map[int]*sftp.Client
-	list             *widget.List
 	ItemStore        map[string]*TreeObject
-	sideLabels       map[*container.TabItem]*widget.Label
 	entryTexts       map[int]*customMultiLineEntry
 	entryFiles       map[int]*widget.Entry
 	sshConfigEditor  *saveSSHconfig
-	contentContainer *fyne.Container
-	fyneImg          *canvas.Image
-	banner           *widget.Label
-	tagLabel         *widget.RichText
 	logsLabel        *widget.Label
-	content          *fyne.Container
 	connectionTab    *container.TabItem
 	bottomConnection *fyne.Container
 }

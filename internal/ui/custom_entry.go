@@ -169,7 +169,7 @@ func (ui *UI) setupSSHSession(host string, sshClient *ssh.Client) (*ssh.Session,
 	return session, in, out, t, nil
 }
 
-func (ui *UI) createList(remoteTree map[string][]scoutssh.FileInfo, entryFile *widget.Entry, entryText *customMultiLineEntry) {
+func (ui *UI) createList(remoteTree map[string][]scoutssh.FileInfo, entryFile *widget.Entry, entryText *customMultiLineEntry) *widget.List {
 	uniqueItems := make(map[string]bool)
 	for key, children := range remoteTree {
 		uniqueItems[key] = true
@@ -192,7 +192,7 @@ func (ui *UI) createList(remoteTree map[string][]scoutssh.FileInfo, entryFile *w
 	sort.Strings(items)
 	entryText.TextStyle = fyne.TextStyle{Bold: false, Italic: false}
 
-	ui.list = widget.NewList(
+	list := widget.NewList(
 		func() int {
 			if len(items) > 0 {
 				return len(items) - 1
@@ -227,10 +227,11 @@ func (ui *UI) createList(remoteTree map[string][]scoutssh.FileInfo, entryFile *w
 		},
 	)
 
-	ui.list.OnSelected = func(id widget.ListItemID) {
+	list.OnSelected = func(id widget.ListItemID) {
 		uid := items[id]
 		entryFile.OnSubmitted(uid)
 	}
+	return list
 }
 
 func (ui *UI) saveState() {
@@ -328,9 +329,7 @@ func (ui *UI) ToggleContent() {
 		ui.connectionTab.Content = container.NewBorder(container.NewVBox(ui.fyneSelect), nil, nil, nil, container.NewVScroll(ui.sshConfigEditor))
 	} else {
 		ui.sshConfigEditor = nil
-		fmt.Println("OK")
 		ui.connectionTab.Content = container.NewBorder(container.NewVBox(ui.fyneSelect), ui.bottomConnection, nil, nil, container.NewVScroll(ui.logsLabel))
-
 	}
 
 }
@@ -370,26 +369,27 @@ func parseURL(urlStr string) *url.URL {
 	return parsedURL
 }
 
-func (ui *UI) SetVersion() {
+func (ui *UI) SetVersion() *widget.RichText {
 	resp, _ := fetchResponseBody("api.github.com/repos/" + repo + "/tags")
 	defer resp.Body.Close()
-
+	var tagLabel *widget.RichText
 	tag, _ := processTags(resp.Body)
 	if tag == "" {
 		tag = "on-prem mode"
 	}
 	if tag != ver && tag != "on-prem mode" && tag != "" {
 
-		ui.tagLabel = widget.NewRichText(
+		tagLabel = widget.NewRichText(
 			&widget.TextSegment{Text: "current version: " + ver + " / main version: " + tag},
 			&widget.HyperlinkSegment{Text: repo, URL: parseURL("https://github.com/" + repo)},
 		)
 	} else {
-		ui.tagLabel = widget.NewRichText(
+		tagLabel = widget.NewRichText(
 			&widget.TextSegment{Text: tag},
 			&widget.HyperlinkSegment{Text: repo, URL: parseURL("https://github.com/" + repo)},
 		)
 	}
+	return tagLabel
 }
 
 func newCustomMultiLineEntry(ui *UI) *customMultiLineEntry {
