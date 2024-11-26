@@ -12,7 +12,6 @@ import (
 func NewMouseDetectingLabel(ui *UI, isBranch bool, entryFile *widget.Entry, entryText *customMultiLineEntry) *MouseDetectingLabel {
 	label := &MouseDetectingLabel{
 		Label:     *widget.NewLabel(""),
-		path:      "",
 		isBranch:  isBranch,
 		entryFile: entryFile,
 		entryText: entryText,
@@ -27,12 +26,11 @@ func (m *MouseDetectingLabel) MouseUp(e *desktop.MouseEvent) {}
 func (m *MouseDetectingLabel) MouseDown(e *desktop.MouseEvent) {
 	switch e.Button {
 	case desktop.MouseButtonPrimary:
-
 		if m.isBranch {
-			m.entryFile.SetText(m.path + "/")
-			m.entryFile.OnSubmitted(m.path)
+			m.entryFile.SetText(m.fullPath)
+			m.entryFile.OnSubmitted(m.fullPath)
 		} else {
-			m.entryFile.SetText(m.path)
+			m.entryFile.SetText(m.fullPath)
 			m.handleSelection()
 		}
 
@@ -61,7 +59,7 @@ func (m *MouseDetectingLabel) showContextMenu(e *desktop.MouseEvent) {
 func (m *MouseDetectingLabel) handleSelection() {
 	selectedTabIndex := m.ui.fyneTabs.SelectedIndex()
 	go func() {
-		fileInfo, err := m.ui.activeSFTP[selectedTabIndex].Stat(m.path)
+		fileInfo, err := m.ui.activeSFTP[selectedTabIndex].Stat(m.fullPath)
 		if err != nil {
 			m.ui.notifyError(fmt.Sprintf("Failed to get file info: %v", err))
 			return

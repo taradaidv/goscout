@@ -15,7 +15,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -145,6 +144,7 @@ func (ui *UI) setupSSHSession(host string, sshClient *ssh.Client) (*terminal.Ter
 		if err := session.Shell(); err != nil {
 			ui.log(host, err.Error())
 		}
+
 	}()
 
 	t := terminal.New()
@@ -152,6 +152,8 @@ func (ui *UI) setupSSHSession(host string, sshClient *ssh.Client) (*terminal.Ter
 		if err := t.RunWithConnection(in, out); err != nil {
 			ui.log(host, err.Error())
 		}
+		ui.fyneTabs.RemoveIndex(ui.fyneTabs.SelectedIndex())
+		ui.log(host, "Disconnected")
 	}()
 
 	ch := make(chan terminal.Config, 1)
@@ -170,66 +172,40 @@ func (ui *UI) setupSSHSession(host string, sshClient *ssh.Client) (*terminal.Ter
 }
 
 func (ui *UI) createList(remoteTree map[string][]scoutssh.FileInfo, entryFile *widget.Entry, entryText *customMultiLineEntry) *widget.List {
-	uniqueItems := make(map[string]bool)
-	for key, children := range remoteTree {
-		uniqueItems[key] = true
+	var items []string
+	for _, children := range remoteTree {
 		for _, child := range children {
-			var childPath string
-			if key == "" {
-				childPath = child.Name
-			} else {
-				childPath = strings.TrimSuffix(key, "/") + "/" + child.Name
-			}
-			uniqueItems[childPath] = child.IsDir
-			ui.ItemStore[childPath] = &TreeObject{FileInfo: child}
+			items = append(items, child.Name)
+			ui.ItemStore[child.Name] = &TreeObject{FileInfo: child}
 		}
 	}
 
-	var items []string
-	for item := range uniqueItems {
-		items = append(items, item)
-	}
 	sort.Strings(items)
 	entryText.TextStyle = fyne.TextStyle{Bold: false, Italic: false}
 
 	list := widget.NewList(
 		func() int {
-			if len(items) > 0 {
-				return len(items) - 1
-			}
-			return 0
+			return len(items)
 		},
 		func() fyne.CanvasObject {
 			return NewMouseDetectingLabel(ui, false, entryFile, entryText)
 		},
 		func(i widget.ListItemID, obj fyne.CanvasObject) {
-			uid := items[i+1]
-			isBranch := uniqueItems[uid]
-
+			uid := items[i]
 			node := obj.(*MouseDetectingLabel)
-			node.path = uid
-			segments := strings.Split(uid, "/")
-			node.SetText(segments[len(segments)-1])
-			node.isBranch = isBranch
-			if isBranch {
-				node.TextStyle.Bold = true
-				node.Wrapping = fyne.TextWrapWord
-			} else {
-				node.TextStyle.Bold = false
-			}
-
+			node.SetText(uid)
 			if treeObject, exists := ui.ItemStore[uid]; exists {
 				info := treeObject.FileInfo
-				if info.IsLink {
-					node.SetText(info.Name + "*")
-				}
+				node.fullPath = info.FullPath
+				node.isBranch = info.IsDir
+				node.TextStyle.Bold = info.IsDir
 			}
 		},
 	)
 
 	list.OnSelected = func(id widget.ListItemID) {
-		uid := items[id]
-		entryFile.OnSubmitted(uid)
+		//	uid := items[id]
+		entryFile.OnSubmitted("/")
 	}
 	return list
 }
@@ -341,7 +317,7 @@ func fetchResponseBody(webEntry string) (*http.Response, error) {
 
 	req, err := http.NewRequest("GET", link.String(), nil)
 	if err == nil {
-		req.Header.Set("User-Agent", "GoScout")
+		req.Header.Set("User-Agent", "GoScout "+ver)
 	}
 	resp, err := httpClient.Do(req)
 

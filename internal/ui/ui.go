@@ -104,8 +104,8 @@ func (ui *UI) connectToHost(host string) *container.TabItem {
 		ui.ToggleContent()
 		return nil
 	}
-
-	sftpClient, sshClient, treeData, err := scoutssh.Connect(ui.fyneWindow, host)
+	ui.log(host, "connection...")
+	sftpClient, sshClient, treeData, err := scoutssh.Connect(ui.fyneWindow, host, ui.cfg.Secret)
 	if err != nil {
 		ui.log(host, err.Error())
 		return nil
@@ -123,15 +123,16 @@ func (ui *UI) connectToHost(host string) *container.TabItem {
 			sshClient.Close()
 		}
 	}()
+
 	ui.fyneSelect.PlaceHolder = "lineup of available hosts"
-	t, err := ui.setupSSHSession(host, sshClient)
+	terminal, err := ui.setupSSHSession(host, sshClient)
 	if err != nil {
 		ui.log(host, err.Error())
 		return nil
 	}
 
 	ui.activeSFTP[len(ui.fyneTabs.Items)] = sftpClient
-
+	ui.log(host, "connected")
 	entryFile := widget.NewEntry()
 	entryFile.SetPlaceHolder("entry path ...")
 
@@ -143,14 +144,13 @@ func (ui *UI) connectToHost(host string) *container.TabItem {
 	var split *container.Split
 	entryFile.OnSubmitted = func(path string) {
 		tabID := ui.fyneTabs.SelectedIndex()
-
 		treeData, err := scoutssh.FetchSFTPData(ui.activeSFTP[tabID], path)
 		if err != nil {
 			ui.notifyError(fmt.Sprintf("Failed to list files: %v", err))
 			return
 		}
 		params := UIParams{
-			Terminal:  t,
+			Terminal:  terminal,
 			TreeData:  treeData,
 			EntryFile: entryFile,
 			EntryText: entryText,
@@ -164,7 +164,7 @@ func (ui *UI) connectToHost(host string) *container.TabItem {
 	}
 
 	params := UIParams{
-		Terminal:  t,
+		Terminal:  terminal,
 		TreeData:  treeData,
 		EntryFile: entryFile,
 		EntryText: entryText,

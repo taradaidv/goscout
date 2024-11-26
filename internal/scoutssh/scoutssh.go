@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"sync"
 
 	"net"
 	"os"
@@ -58,7 +59,7 @@ func isSpecificHost(host string) bool {
 	return true
 }
 
-func Connect(w fyne.Window, host string) (*sftp.Client, *ssh.Client, map[string][]FileInfo, error) {
+func Connect(w fyne.Window, host, secret string) (*sftp.Client, *ssh.Client, map[string][]FileInfo, error) {
 	configFile, err := os.Open(filepath.Join(os.Getenv("HOME"), ".ssh", "config"))
 	if err != nil {
 		return nil, nil, nil, err
@@ -174,7 +175,7 @@ func Connect(w fyne.Window, host string) (*sftp.Client, *ssh.Client, map[string]
 
 		ncc, chans, reqs, err := ssh.NewClientConn(targetConn, hostname+":"+port, sshConfig)
 		if err != nil {
-			password := RequestPassword(host, hostname, w)
+			password := RequestPassword(host, hostname, secret, w)
 			if password == "" {
 				return nil, nil, nil, errors.New("password auth decline")
 			}
@@ -213,7 +214,7 @@ func Connect(w fyne.Window, host string) (*sftp.Client, *ssh.Client, map[string]
 	sshClient, err := ssh.Dial("tcp", hostname+":"+port, sshConfig)
 
 	if err != nil {
-		password := RequestPassword(host, hostname, w)
+		password := RequestPassword(host, hostname, secret, w)
 		if password == "" {
 			return nil, nil, nil, errors.New("password auth decline")
 		}
@@ -242,11 +243,11 @@ func Connect(w fyne.Window, host string) (*sftp.Client, *ssh.Client, map[string]
 	return sftpClient, sshClient, listings, nil
 }
 
-func RequestPassword(host, hostname string, w fyne.Window) string {
+func RequestPassword(host, hostname, secret string, w fyne.Window) string {
 
 	passwordChan := make(chan string)
 	passwordEntry := widget.NewPasswordEntry()
-
+	passwordEntry.SetText(secret)
 	dialog.ShowCustomConfirm(host+" / "+hostname, "OK", "Cancel",
 		container.NewVBox(widget.NewLabel("ssh password auth"), passwordEntry),
 		func(ok bool) {
@@ -261,14 +262,10 @@ func RequestPassword(host, hostname string, w fyne.Window) string {
 }
 
 type FileInfo struct {
-	Name string
-	// Size    int64
-	// ModTime time.Time
-	IsDir  bool
-	IsLink bool
-	// Owner   string
-	// Group   string
-	// Perm string
+	Name     string
+	IsDir    bool
+	IsLink   bool
+	FullPath string
 }
 
 func FetchSFTPData(client *sftp.Client, path string) (map[string][]FileInfo, error) {
@@ -278,35 +275,64 @@ func FetchSFTPData(client *sftp.Client, path string) (map[string][]FileInfo, err
 		return nil, err
 	}
 
-	for _, entry := range entries {
-		//TODO:boost
-		//fullPath := filepath.Join(path, entry.Name())
-		// stat, err := client.Lstat(fullPath)
-		// if err != nil {
-		// 	return nil, err
-		// }
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	fileInfoChan := make(chan FileInfo, len(entries))
+	workerCount := 10
 
-		// fileStat, ok := stat.Sys().(*sftp.FileStat)
-		// if !ok {
-		// 	return nil, fmt.Errorf("failed to assert file stat")
-		// }
+	worker := func(entries <-chan os.FileInfo) {
+		for entry := range entries {
+			fullPath := filepath.Join(path, entry.Name())
+			isLink := entry.Mode()&os.ModeSymlink != 0
+			isDir := entry.IsDir()
+			name := entry.Name()
 
-		// owner := fmt.Sprintf("%d", fileStat.UID)
-		// group := fmt.Sprintf("%d", fileStat.GID)
+			if isLink {
+				name += "*"
+				if realPath, err := client.ReadLink(fullPath); err == nil {
+					if linkInfo, err := client.Stat(fullPath); err == nil && linkInfo.IsDir() {
+						fullPath = "/" + realPath + "/"
+						isDir = true
+					}
+				}
+			} else if isDir {
+				fullPath += "/"
+			}
 
-		fileInfo := FileInfo{
-			Name: entry.Name(),
-			// Size:    entry.Size(),
-			// ModTime: entry.ModTime(),
-			IsDir:  entry.IsDir(),
-			IsLink: entry.Mode()&os.ModeSymlink != 0,
-			// Owner:   owner,
-			// Group:   group,
-			// Perm: entry.Mode().Perm().String(),
+			fileInfo := FileInfo{
+				Name:     name,
+				FullPath: fullPath,
+				IsDir:    isDir,
+				IsLink:   isLink,
+			}
+
+			fileInfoChan <- fileInfo
 		}
+		wg.Done()
+	}
 
-		dir := path
-		data[dir] = append(data[dir], fileInfo)
+	entryChan := make(chan os.FileInfo, len(entries))
+	for i := 0; i < workerCount; i++ {
+		wg.Add(1)
+		go worker(entryChan)
+	}
+
+	go func() {
+		for _, entry := range entries {
+			entryChan <- entry
+		}
+		close(entryChan)
+	}()
+
+	go func() {
+		wg.Wait()
+		close(fileInfoChan)
+	}()
+
+	for fileInfo := range fileInfoChan {
+		mu.Lock()
+		data[path] = append(data[path], fileInfo)
+		mu.Unlock()
 	}
 
 	return data, nil
