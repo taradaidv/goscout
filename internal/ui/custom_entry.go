@@ -3,13 +3,13 @@ package ui
 import (
 	"encoding/json"
 	"fmt"
+	"goscout/internal/scoutssh"
 	"io"
 	"net/http"
 	"net/url"
 	"time"
 	"unicode/utf8"
 
-	"goscout/internal/scoutssh"
 	"image/color"
 	"log"
 	"os"
@@ -299,7 +299,6 @@ func (e *saveSSHconfig) TypedShortcut(shortcut fyne.Shortcut) {
 			content := container.NewVBox(
 				widget.NewLabel("✅ The SSH client configuration file has been saved."),
 				widget.NewLabel("Stay trendy, move away from passwords."),
-				widget.NewLabel("Connection list includes only hosts with a private key for security and convenience."),
 				layout.NewSpacer(),
 			)
 			dialog.ShowCustom("SSH config", "OK", content, e.ui.fyneWindow)

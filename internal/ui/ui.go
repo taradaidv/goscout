@@ -105,7 +105,7 @@ func (ui *UI) connectToHost(host string) *container.TabItem {
 		return nil
 	}
 
-	sftpClient, sshClient, treeData, err := scoutssh.Connect(host)
+	sftpClient, sshClient, treeData, err := scoutssh.Connect(ui.fyneWindow, host)
 	if err != nil {
 		ui.log(host, err.Error())
 		return nil

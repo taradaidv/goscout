@@ -2,12 +2,18 @@ package scoutssh
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
+
 	"net"
 	"os"
 	"os/user"
 	"path/filepath"
 
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/widget"
 	"github.com/kevinburke/ssh_config"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
@@ -52,7 +58,7 @@ func isSpecificHost(host string) bool {
 	return true
 }
 
-func Connect(host string) (*sftp.Client, *ssh.Client, map[string][]FileInfo, error) {
+func Connect(w fyne.Window, host string) (*sftp.Client, *ssh.Client, map[string][]FileInfo, error) {
 	configFile, err := os.Open(filepath.Join(os.Getenv("HOME"), ".ssh", "config"))
 	if err != nil {
 		return nil, nil, nil, err
@@ -168,9 +174,10 @@ func Connect(host string) (*sftp.Client, *ssh.Client, map[string][]FileInfo, err
 
 		ncc, chans, reqs, err := ssh.NewClientConn(targetConn, hostname+":"+port, sshConfig)
 		if err != nil {
-			fmt.Print("Enter password: ")
-			var password string
-			fmt.Scanln(&password)
+			password := RequestPassword(host, hostname, w)
+			if password == "" {
+				return nil, nil, nil, errors.New("password auth decline")
+			}
 			authMethods = append(authMethods, ssh.Password(password))
 			sshConfig.Auth = authMethods
 
@@ -204,10 +211,12 @@ func Connect(host string) (*sftp.Client, *ssh.Client, map[string][]FileInfo, err
 	}
 
 	sshClient, err := ssh.Dial("tcp", hostname+":"+port, sshConfig)
+
 	if err != nil {
-		fmt.Print("Enter password: ")
-		var password string
-		fmt.Scanln(&password)
+		password := RequestPassword(host, hostname, w)
+		if password == "" {
+			return nil, nil, nil, errors.New("password auth decline")
+		}
 		authMethods = append(authMethods, ssh.Password(password))
 		sshConfig.Auth = authMethods
 
@@ -231,6 +240,24 @@ func Connect(host string) (*sftp.Client, *ssh.Client, map[string][]FileInfo, err
 	}
 
 	return sftpClient, sshClient, listings, nil
+}
+
+func RequestPassword(host, hostname string, w fyne.Window) string {
+
+	passwordChan := make(chan string)
+	passwordEntry := widget.NewPasswordEntry()
+
+	dialog.ShowCustomConfirm(host+" / "+hostname, "OK", "Cancel",
+		container.NewVBox(widget.NewLabel("ssh password auth"), passwordEntry),
+		func(ok bool) {
+			if ok {
+				passwordChan <- passwordEntry.Text
+			} else {
+				passwordChan <- ""
+			}
+		}, w)
+
+	return <-passwordChan
 }
 
 type FileInfo struct {

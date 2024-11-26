@@ -3,7 +3,7 @@
 
 # GoScout
 
-The GoScout is a tool with a UI for efficient and secure remote host management using key-based authentication. It's fully written in Go and requires no additional software installations.
+The GoScout is a UI tool for efficient and secure remote host management using ssh. It's fully written in Go and requires no additional software installations.
 
 
 [![Go](https://img.shields.io/badge/Go-1.23-blue)](https://golang.org)
@@ -54,7 +54,7 @@ Already planned is:
 |Follow symlinks|⚪️|
 |Integrate with IPFS|-|
 |Mouse actions|🟢|
-|Password input support for *ssh* and *sftp*|⚪️|
+|Password input support for *ssh* and *sftp*|🟢|
 |Scroll-back|⚪️|
 |Sync files and folders via native OS file manager|⚪️|
 |...|...|
