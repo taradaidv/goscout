@@ -46,7 +46,7 @@ func SetupWindow(fyneWindow fyne.Window, cfg *Config) {
 		entryTexts:       map[int]*customMultiLineEntry{},
 		entryFiles:       map[int]*widget.Entry{},
 		sshConfigEditor:  nil,
-		logsLabel:        &widget.Entry{},
+		logsLabel:        widget.NewMultiLineEntry(),
 		connectionTab:    &container.TabItem{},
 		bottomConnection: &fyne.Container{},
 	}
@@ -124,7 +124,7 @@ func (ui *UI) connectToHost(host string) *container.TabItem {
 		}
 	}()
 	ui.fyneSelect.PlaceHolder = "lineup of available hosts"
-	_, _, _, t, err := ui.setupSSHSession(host, sshClient)
+	t, err := ui.setupSSHSession(host, sshClient)
 	if err != nil {
 		ui.log(host, err.Error())
 		return nil

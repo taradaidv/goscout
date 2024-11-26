@@ -121,24 +121,24 @@ func (ui *UI) saveFile() {
 	ui.notifySuccess("File saved successfully")
 }
 
-func (ui *UI) setupSSHSession(host string, sshClient *ssh.Client) (*ssh.Session, io.WriteCloser, io.Reader, *terminal.Terminal, error) {
+func (ui *UI) setupSSHSession(host string, sshClient *ssh.Client) (*terminal.Terminal, error) {
 	session, err := sshClient.NewSession()
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("failed to create session: %w", err)
+		return nil, err
 	}
 
 	if err := session.RequestPty("xterm", 80, 40, ssh.TerminalModes{}); err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("failed to request PTY: %w", err)
+		return nil, err
 	}
 
 	in, err := session.StdinPipe()
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("failed to get stdin pipe: %w", err)
+		return nil, err
 	}
 
 	out, err := session.StdoutPipe()
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("failed to get stdout pipe: %w", err)
+		return nil, err
 	}
 
 	go func() {
@@ -166,7 +166,7 @@ func (ui *UI) setupSSHSession(host string, sshClient *ssh.Client) (*ssh.Session,
 	}()
 	t.AddListener(ch)
 
-	return session, in, out, t, nil
+	return t, nil
 }
 
 func (ui *UI) createList(remoteTree map[string][]scoutssh.FileInfo, entryFile *widget.Entry, entryText *customMultiLineEntry) *widget.List {
