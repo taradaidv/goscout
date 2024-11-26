@@ -26,14 +26,7 @@ func (m *MouseDetectingLabel) MouseUp(e *desktop.MouseEvent) {}
 func (m *MouseDetectingLabel) MouseDown(e *desktop.MouseEvent) {
 	switch e.Button {
 	case desktop.MouseButtonPrimary:
-		if m.isBranch {
-			m.entryFile.SetText(m.fullPath)
-			m.entryFile.OnSubmitted(m.fullPath)
-		} else {
-			m.entryFile.SetText(m.fullPath)
-			m.handleSelection()
-		}
-
+		go m.entryFile.OnSubmitted(m.fullPath)
 	case desktop.MouseButtonSecondary:
 		m.showContextMenu(e)
 	}
@@ -56,57 +49,60 @@ func (m *MouseDetectingLabel) showContextMenu(e *desktop.MouseEvent) {
 	}
 }
 
-func (m *MouseDetectingLabel) handleSelection() {
-	selectedTabIndex := m.ui.fyneTabs.SelectedIndex()
-	go func() {
-		fileInfo, err := m.ui.activeSFTP[selectedTabIndex].Stat(m.fullPath)
-		if err != nil {
-			m.ui.notifyError(fmt.Sprintf("Failed to get file info: %v", err))
-			return
-		}
+func (ui *UI) handleSelection(fullPath string) *customMultiLineEntry {
+	selectedTabIndex := ui.fyneTabs.SelectedIndex()
+	entryText := &customMultiLineEntry{}
 
-		if fileInfo.Size() > 10*1024 {
-			var sizeStr string
-			const unit = 1024
-			if fileInfo.Size() < unit {
-				sizeStr = fmt.Sprintf("%d B", fileInfo.Size())
-			} else {
-				div, exp := int64(unit), 0
-				for n := fileInfo.Size() / unit; n >= unit; n /= unit {
-					div *= unit
-					exp++
-				}
+	fileInfo, err := ui.activeSFTP[selectedTabIndex].Stat(fullPath)
+	if err != nil {
+		entryText.SetText(fullPath + "\n" + fmt.Sprintf("Failed to get file info: %v", err))
+		entryText.TextStyle = fyne.TextStyle{Bold: true, Italic: true}
+		return entryText
+	}
 
-				sizeStr = fmt.Sprintf("%.1f %cB", float64(fileInfo.Size())/float64(div), "KMGTPE"[exp])
+	if fileInfo.Size() > 10*1024 {
+		var sizeStr string
+		const unit = 1024
+		if fileInfo.Size() < unit {
+			sizeStr = fmt.Sprintf("%d B", fileInfo.Size())
+		} else {
+			div, exp := int64(unit), 0
+			for n := fileInfo.Size() / unit; n >= unit; n /= unit {
+				div *= unit
+				exp++
 			}
 
-			m.ui.fyneWindow.Content().Refresh()
-			m.entryText.SetText(m.entryFile.Text + "\nFile too large to display, " + sizeStr)
-			m.entryText.TextStyle = fyne.TextStyle{Bold: true, Italic: true}
-			m.entryText.Refresh()
-			return
+			sizeStr = fmt.Sprintf("%.1f %cB", float64(fileInfo.Size())/float64(div), "KMGTPE"[exp])
 		}
 
-		file, err := m.ui.activeSFTP[selectedTabIndex].Open(m.entryFile.Text)
-		if err != nil {
-			m.ui.notifyError(fmt.Sprintf("Failed to open file: %v", err))
-			return
-		}
-		defer file.Close()
+		ui.fyneWindow.Content().Refresh()
 
-		content, err := io.ReadAll(file)
-		if err != nil {
-			m.ui.notifyError(fmt.Sprintf("Failed to read file: %v", err))
-			return
-		}
+		entryText.SetText(fullPath + "\nFile too large to display, " + sizeStr)
+		entryText.TextStyle = fyne.TextStyle{Bold: true, Italic: true}
+		return entryText
+	}
 
-		m.ui.fyneWindow.Content().Refresh()
-		if isReadable(content) {
-			m.entryText.SetText(string(content))
-		} else {
-			m.entryText.SetText(m.entryFile.Text + "\nFile contains unreadable symbols")
-			m.entryText.TextStyle = fyne.TextStyle{Bold: true, Italic: true}
-			m.entryText.Refresh()
-		}
-	}()
+	file, err := ui.activeSFTP[selectedTabIndex].Open(fullPath)
+	if err != nil {
+		entryText.SetText(fullPath + "\n" + fmt.Sprintf("Failed to open file: %v", err))
+		entryText.TextStyle = fyne.TextStyle{Bold: true, Italic: true}
+		return entryText
+	}
+	defer file.Close()
+
+	content, err := io.ReadAll(file)
+	if err != nil {
+		ui.notifyError(fmt.Sprintf("Failed to read file: %v", err))
+		return entryText
+	}
+
+	ui.fyneWindow.Content().Refresh()
+	if isReadable(content) {
+		entryText.SetText(string(content))
+		entryText.TextStyle = fyne.TextStyle{}
+	} else {
+		entryText.SetText(fullPath + "\nFile contains unreadable symbols")
+		entryText.TextStyle = fyne.TextStyle{Bold: true, Italic: true}
+	}
+	return entryText
 }

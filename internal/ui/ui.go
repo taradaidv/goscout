@@ -136,31 +136,39 @@ func (ui *UI) connectToHost(host string) *container.TabItem {
 	entryFile := widget.NewEntry()
 	entryFile.SetPlaceHolder("entry path ...")
 
-	entryText := newCustomMultiLineEntry(ui)
+	entryText := &customMultiLineEntry{}
 
 	ui.entryFiles[len(ui.fyneTabs.Items)] = entryFile
 	ui.entryTexts[len(ui.fyneTabs.Items)] = entryText
 
 	var split *container.Split
-	entryFile.OnSubmitted = func(path string) {
-		tabID := ui.fyneTabs.SelectedIndex()
-		treeData, err := scoutssh.FetchSFTPData(ui.activeSFTP[tabID], path)
-		if err != nil {
-			ui.notifyError(fmt.Sprintf("Failed to list files: %v", err))
-			return
-		}
-		params := UIParams{
-			Terminal:  terminal,
-			TreeData:  treeData,
-			EntryFile: entryFile,
-			EntryText: entryText,
-		}
+	entryFile.OnSubmitted = func(fullPath string) {
+		entryFile.SetText(fullPath)
+		if strings.HasSuffix(fullPath, "/") || fullPath == "." {
+			tabID := ui.fyneTabs.SelectedIndex()
+			treeData, err := scoutssh.FetchSFTPData(ui.activeSFTP[tabID], fullPath)
+			if err != nil {
+				ui.notifyError(fmt.Sprintf("Failed to list files: %v", err))
+				return
+			}
+			params := UIParams{
+				Terminal:  terminal,
+				TreeData:  treeData,
+				EntryFile: entryFile,
+				EntryText: entryText,
+			}
 
-		split = container.NewHSplit(ui.components(params))
-		split.SetOffset(ui.cfg.SplitOffset)
+			split = container.NewHSplit(ui.components(params))
+			split.SetOffset(ui.cfg.SplitOffset)
 
-		ui.fyneTabs.Items[tabID].Content = container.NewBorder(nil, nil, nil, nil, split)
-		ui.fyneTabs.Refresh()
+			ui.fyneTabs.Items[tabID].Content = container.NewBorder(nil, nil, nil, nil, split)
+			ui.fyneTabs.Refresh()
+		} else {
+			newEntryText := ui.handleSelection(fullPath)
+			entryText.SetText(newEntryText.Text)
+			entryText.TextStyle = newEntryText.TextStyle
+			entryText.Refresh()
+		}
 	}
 
 	params := UIParams{

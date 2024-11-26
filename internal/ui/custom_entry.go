@@ -181,7 +181,6 @@ func (ui *UI) createList(remoteTree map[string][]scoutssh.FileInfo, entryFile *w
 	}
 
 	sort.Strings(items)
-	entryText.TextStyle = fyne.TextStyle{Bold: false, Italic: false}
 
 	list := widget.NewList(
 		func() int {
@@ -203,10 +202,6 @@ func (ui *UI) createList(remoteTree map[string][]scoutssh.FileInfo, entryFile *w
 		},
 	)
 
-	list.OnSelected = func(id widget.ListItemID) {
-		//	uid := items[id]
-		entryFile.OnSubmitted("/")
-	}
 	return list
 }
 
@@ -367,12 +362,12 @@ func (ui *UI) SetVersion() *widget.RichText {
 	return tagLabel
 }
 
-func newCustomMultiLineEntry(ui *UI) *customMultiLineEntry {
-	entry := &customMultiLineEntry{ui: ui}
-	entry.ExtendBaseWidget(entry)
-	entry.MultiLine = true
-	return entry
-}
+// func newCustomMultiLineEntry(ui *UI) *customMultiLineEntry {
+// 	entry := &customMultiLineEntry{ui: ui}
+// 	entry.ExtendBaseWidget(entry)
+// 	entry.MultiLine = true
+// 	return entry
+// }
 
 func (e *customMultiLineEntry) TypedShortcut(shortcut fyne.Shortcut) {
 	if sc, ok := shortcut.(*desktop.CustomShortcut); ok {
