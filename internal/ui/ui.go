@@ -31,7 +31,6 @@ func (ui *UI) SetHosts() {
 	}
 	hosts = append(hosts, "[edit ➜ ~/.ssh/config]")
 	ui.fyneSelect.Options = hosts
-	ui.fyneSelect.PlaceHolder = "lineup of available hosts"
 	ui.fyneSelect.Refresh()
 }
 
@@ -157,7 +156,7 @@ func (ui *UI) connectToHost(host string) *container.TabItem {
 			sshClient.Close()
 		}
 	}()
-
+	ui.fyneSelect.PlaceHolder = "lineup of available hosts"
 	_, _, _, t, err := ui.setupSSHSession(host, sshClient)
 	if err != nil {
 		ui.log(host, err.Error())

@@ -1,4 +1,3 @@
-// TODO:perform a major refactoring
 package scoutssh
 
 import (
@@ -70,21 +69,56 @@ func ConnectAndListFiles(host, path string) (*sftp.Client, *ssh.Client, map[stri
 		hostname = host
 	}
 
-	identityFile, err := cfg.Get(host, "IdentityFile")
+	var authMethods []ssh.AuthMethod
+	identity, _ := cfg.Get(host, "IdentityFile")
+	if identity != "" {
+		if identity[:2] == "~/" {
+			identity = filepath.Join(os.Getenv("HOME"), identity[2:])
+		}
+		key, err := os.ReadFile(identity)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		signer, err := ssh.ParsePrivateKey(key)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		authMethods = append(authMethods, ssh.PublicKeys(signer))
+	} else {
+		sshAgentSock := os.Getenv("SSH_AUTH_SOCK")
+		if sshAgentSock == "" {
+			return nil, nil, nil, fmt.Errorf("SSH_AUTH_SOCK is not set")
+		}
+
+		sshAgent, err := net.Dial("unix", sshAgentSock)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		defer sshAgent.Close()
+
+		agentClient := agent.NewClient(sshAgent)
+		signers, err := agentClient.Signers()
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		if len(signers) == 0 {
+			return nil, nil, nil, fmt.Errorf("no signers found in SSH agent")
+		}
+		authMethods = append(authMethods, ssh.PublicKeys(signers...))
+	}
+
+	username, err := cfg.Get(host, "User")
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	if identityFile != "" {
-		if identityFile[:2] == "~/" {
-			identityFile = filepath.Join(os.Getenv("HOME"), identityFile[2:])
+	if username == "" {
+		currentUser, err := user.Current()
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to get current user: %v", err)
 		}
-		return connectWithIdentityFile(identityFile, host, hostname, path, cfg)
+		username = currentUser.Username
 	}
 
-	return connectWithoutIdentityFile(host, hostname, path, cfg)
-}
-
-func connectWithIdentityFile(identityFile, host, hostname, path string, cfg *ssh_config.Config) (*sftp.Client, *ssh.Client, map[string][]FileInfo, error) {
 	port, err := cfg.Get(host, "Port")
 	if err != nil {
 		return nil, nil, nil, err
@@ -93,140 +127,91 @@ func connectWithIdentityFile(identityFile, host, hostname, path string, cfg *ssh
 		port = "22"
 	}
 
-	user, err := cfg.Get(host, "User")
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	if user == "" {
-		return nil, nil, nil, fmt.Errorf("user nil")
-	}
-
-	key, err := os.ReadFile(identityFile)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	signer, err := ssh.ParsePrivateKey(key)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	sshConfig := &ssh.ClientConfig{
-		User: user,
-		Auth: []ssh.AuthMethod{
-			ssh.PublicKeys(signer),
-		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-	}
-
-	conn, err := ssh.Dial("tcp", hostname+":"+port, sshConfig)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	client, err := sftp.NewClient(conn)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	listings, err := FetchSFTPData(client, path)
-	if err != nil {
-		conn.Close()
-		client.Close()
-		return nil, nil, nil, err
-	}
-
-	return client, conn, listings, nil
-}
-
-func connectWithoutIdentityFile(host, hostname, path string, config *ssh_config.Config) (*sftp.Client, *ssh.Client, map[string][]FileInfo, error) {
-	sshAgentSock := os.Getenv("SSH_AUTH_SOCK")
-	if sshAgentSock == "" {
-		return nil, nil, nil, fmt.Errorf("SSH_AUTH_SOCK is not set")
-	}
-
-	sshAgent, err := net.Dial("unix", sshAgentSock)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	agentClient := agent.NewClient(sshAgent)
-	signers, err := agentClient.Signers()
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	if len(signers) == 0 {
-		return nil, nil, nil, fmt.Errorf("no signers found in SSH agent")
-	}
-
-	targetUser, _ := config.Get(host, "User")
-	if targetUser == "" {
-		currentUser, err := user.Current()
-		if err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to get current user: %v", err)
+	proxyJump, _ := cfg.Get(host, "ProxyJump")
+	if proxyJump != "" {
+		proxyHost, _ := cfg.Get(proxyJump, "HostName")
+		if proxyHost == "" {
+			proxyHost = proxyJump
 		}
-		targetUser = currentUser.Username
-	}
+		proxyUser, _ := cfg.Get(proxyJump, "User")
+		if proxyUser == "" {
+			currentUser, err := user.Current()
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			proxyUser = currentUser.Username
+		}
 
-	proxyJump, _ := config.Get(host, "ProxyJump")
-	if proxyJump == "" {
-		return nil, nil, nil, fmt.Errorf("no ProxyJump configuration found for the target host")
-	}
+		proxyConfig := &ssh.ClientConfig{
+			User:            proxyUser,
+			Auth:            authMethods,
+			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		}
 
-	proxyHost, _ := config.Get(proxyJump, "HostName")
-	if proxyHost == "" {
-		proxyHost = proxyJump
-	}
-	proxyUser, _ := config.Get(proxyJump, "User")
-	if proxyUser == "" {
-		currentUser, err := user.Current()
+		proxyClient, err := ssh.Dial("tcp", proxyHost+":22", proxyConfig)
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		proxyUser = currentUser.Username
+
+		targetConn, err := proxyClient.Dial("tcp", hostname+":"+port)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		sshConfig := &ssh.ClientConfig{
+			User:            username,
+			Auth:            authMethods,
+			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		}
+
+		ncc, chans, reqs, err := ssh.NewClientConn(targetConn, hostname+":"+port, sshConfig)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		sshClient := ssh.NewClient(ncc, chans, reqs)
+
+		sftpClient, err := sftp.NewClient(sshClient)
+		if err != nil {
+			sshClient.Close()
+			return nil, nil, nil, err
+		}
+
+		listings, err := FetchSFTPData(sftpClient, path)
+		if err != nil {
+			sshClient.Close()
+			sftpClient.Close()
+			return nil, nil, nil, err
+		}
+
+		return sftpClient, sshClient, listings, nil
 	}
 
-	configSSH := &ssh.ClientConfig{
-		User: proxyUser,
-		Auth: []ssh.AuthMethod{
-			ssh.PublicKeys(signers...),
-		},
+	sshConfig := &ssh.ClientConfig{
+		User:            username,
+		Auth:            authMethods,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
 
-	proxyClient, err := ssh.Dial("tcp", proxyHost+":22", configSSH)
+	sshClient, err := ssh.Dial("tcp", hostname+":"+port, sshConfig)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	targetConn, err := proxyClient.Dial("tcp", hostname+":22")
+	sftpClient, err := sftp.NewClient(sshClient)
 	if err != nil {
+		sshClient.Close()
 		return nil, nil, nil, err
 	}
 
-	configSSH.User = targetUser
-	ncc, chans, reqs, err := ssh.NewClientConn(targetConn, hostname+":22", configSSH)
+	listings, err := FetchSFTPData(sftpClient, path)
 	if err != nil {
-		return nil, nil, nil, err
-	}
-	conn := ssh.NewClient(ncc, chans, reqs)
-
-	client, err := sftp.NewClient(conn)
-	if err != nil {
+		sshClient.Close()
+		sftpClient.Close()
 		return nil, nil, nil, err
 	}
 
-	listings, err := FetchSFTPData(client, path)
-	if err != nil {
-		sshAgent.Close()
-		proxyClient.Close()
-		targetConn.Close()
-		conn.Close()
-		client.Close()
-		return nil, nil, nil, err
-	}
+	return sftpClient, sshClient, listings, nil
 
-	return client, conn, listings, nil
 }
 
 type FileInfo struct {
