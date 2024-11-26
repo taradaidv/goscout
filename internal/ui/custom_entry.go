@@ -360,7 +360,7 @@ func processTags(body io.ReadCloser) (string, error) {
 		return "", fmt.Errorf("no tags found")
 	}
 
-	return tags[len(tags)-1].Name, nil
+	return tags[0].Name, nil
 }
 
 func parseURL(urlStr string) *url.URL {
