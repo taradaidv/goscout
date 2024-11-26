@@ -3,15 +3,14 @@ package ui
 import (
 	"encoding/json"
 	"fmt"
+	"goscout/internal/scoutssh"
 	"io"
 	"net/http"
 	"net/url"
 	"time"
 	"unicode/utf8"
 
-	"goscout/internal/scoutssh"
 	"image/color"
-	"image/png"
 	"log"
 	"os"
 	"path/filepath"
@@ -29,15 +28,6 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/ssh"
 )
-
-type Config struct {
-	WindowWidth  float32 `json:"window_width"`
-	WindowHeight float32 `json:"window_height"`
-	SplitOffset  float64 `json:"split_offset"`
-	OpenTabs     []string
-}
-
-const configFile = ".goscout.json"
 
 func getConfigFilePath() (string, error) {
 	homeDir, err := os.UserHomeDir()
@@ -116,8 +106,6 @@ func (ui *UI) saveFile() {
 	defer file.Close()
 
 	content := entryText.Text
-	ui.notifyError(fmt.Sprintf("Writing content to %s: %s\n", filePath, content))
-
 	_, err = file.Write([]byte(content))
 	if err != nil {
 		ui.notifyError(fmt.Sprintf("Failed to write to file: %v", err))
@@ -133,7 +121,7 @@ func (ui *UI) saveFile() {
 	ui.notifySuccess("File saved successfully")
 }
 
-func (ui *UI) setupSSHSession(sshClient *ssh.Client) (*ssh.Session, io.WriteCloser, io.Reader, *terminal.Terminal, error) {
+func (ui *UI) setupSSHSession(host string, sshClient *ssh.Client) (*ssh.Session, io.WriteCloser, io.Reader, *terminal.Terminal, error) {
 	session, err := sshClient.NewSession()
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("failed to create session: %w", err)
@@ -155,14 +143,14 @@ func (ui *UI) setupSSHSession(sshClient *ssh.Client) (*ssh.Session, io.WriteClos
 
 	go func() {
 		if err := session.Shell(); err != nil {
-			ui.notifyError(err.Error())
+			ui.log(host, err.Error())
 		}
 	}()
 
 	t := terminal.New()
 	go func() {
 		if err := t.RunWithConnection(in, out); err != nil {
-			ui.notifyError(err.Error())
+			ui.log(host, err.Error())
 		}
 	}()
 
@@ -181,7 +169,7 @@ func (ui *UI) setupSSHSession(sshClient *ssh.Client) (*ssh.Session, io.WriteClos
 	return session, in, out, t, nil
 }
 
-func (ui *UI) createList(remoteTree map[string][]scoutssh.FileInfo, entryFile *widget.Entry, entryText *customMultiLineEntry) {
+func (ui *UI) createList(remoteTree map[string][]scoutssh.FileInfo, entryFile *widget.Entry, entryText *customMultiLineEntry) *widget.List {
 	uniqueItems := make(map[string]bool)
 	for key, children := range remoteTree {
 		uniqueItems[key] = true
@@ -204,7 +192,7 @@ func (ui *UI) createList(remoteTree map[string][]scoutssh.FileInfo, entryFile *w
 	sort.Strings(items)
 	entryText.TextStyle = fyne.TextStyle{Bold: false, Italic: false}
 
-	ui.list = widget.NewList(
+	list := widget.NewList(
 		func() int {
 			if len(items) > 0 {
 				return len(items) - 1
@@ -239,10 +227,11 @@ func (ui *UI) createList(remoteTree map[string][]scoutssh.FileInfo, entryFile *w
 		},
 	)
 
-	ui.list.OnSelected = func(id widget.ListItemID) {
+	list.OnSelected = func(id widget.ListItemID) {
 		uid := items[id]
 		entryFile.OnSubmitted(uid)
 	}
+	return list
 }
 
 func (ui *UI) saveState() {
@@ -279,17 +268,6 @@ func isPrintable(r rune) bool {
 	return r == '\t' || r == '\n' || r == '\r' || (r >= ' ' && r <= '~') || (r > 127 && r != utf8.RuneError)
 }
 
-type customMultiLineEntry struct {
-	widget.Entry
-	ui *UI
-}
-
-type saveSSHconfig struct {
-	cfgFile string
-	widget.Entry
-	ui *UI
-}
-
 func actionSSHconfig(ui *UI, cfgFile string) *saveSSHconfig {
 	entry := &saveSSHconfig{
 		cfgFile: cfgFile,
@@ -315,13 +293,12 @@ func (e *saveSSHconfig) TypedShortcut(shortcut fyne.Shortcut) {
 				return
 			}
 			file.Close()
-			e.ui.updateHosts()
+			e.ui.SetHosts()
 			e.ui.ToggleContent()
 
 			content := container.NewVBox(
 				widget.NewLabel("✅ The SSH client configuration file has been saved."),
 				widget.NewLabel("Stay trendy, move away from passwords."),
-				widget.NewLabel("Connection list includes only hosts with a private key for security and convenience."),
 				layout.NewSpacer(),
 			)
 			dialog.ShowCustom("SSH config", "OK", content, e.ui.fyneWindow)
@@ -332,21 +309,28 @@ func (e *saveSSHconfig) TypedShortcut(shortcut fyne.Shortcut) {
 }
 
 func (ui *UI) ToggleContent() {
-	if ui.sshConfigEditor.Visible() {
-		ui.sshConfigEditor.Hide()
-		if ui.fyneImg != nil {
-			ui.fyneImg.Show()
-		} else {
-			ui.label.Show()
+
+	if ui.sshConfigEditor == nil {
+		file, err := os.Open(filepath.Join(os.Getenv("HOME"), ".ssh", "config"))
+		if err != nil {
+			log.Fatal(err)
 		}
+		defer file.Close()
+
+		buffer := make([]byte, 1024)
+		n, err := file.Read(buffer)
+		if err != nil && err != io.EOF {
+			log.Fatalln("EOF", err)
+		}
+
+		ui.sshConfigEditor = actionSSHconfig(ui, file.Name())
+		ui.sshConfigEditor.SetText(string(buffer[:n]))
+		ui.connectionTab.Content = container.NewBorder(container.NewVBox(ui.fyneSelect), nil, nil, nil, container.NewVScroll(ui.sshConfigEditor))
 	} else {
-		if ui.fyneImg != nil {
-			ui.fyneImg.Hide()
-		} else {
-			ui.label.Hide()
-		}
-		ui.sshConfigEditor.Show()
+		ui.sshConfigEditor = nil
+		ui.connectionTab.Content = container.NewBorder(container.NewVBox(ui.fyneSelect), ui.bottomConnection, nil, nil, container.NewVScroll(ui.logsLabel))
 	}
+
 }
 
 func fetchResponseBody(webEntry string) (*http.Response, error) {
@@ -362,10 +346,6 @@ func fetchResponseBody(webEntry string) (*http.Response, error) {
 	resp, err := httpClient.Do(req)
 
 	return resp, err
-}
-
-type Tag struct {
-	Name string `json:"name"`
 }
 
 func processTags(body io.ReadCloser) (string, error) {
@@ -388,64 +368,27 @@ func parseURL(urlStr string) *url.URL {
 	return parsedURL
 }
 
-func (ui *UI) CreateConnectionContent() *fyne.Container {
-	ui.updateTagLabel()
-	ui.updateContentContainer()
-	return container.NewBorder(ui.fyneSelect, ui.tagLabel, nil, nil, ui.contentContainer)
-}
-
-func (ui *UI) updateTagLabel() {
-	resp, _ := fetchResponseBody("api.github.com/repos/" + ui.repo + "/tags")
+func (ui *UI) SetVersion() *widget.RichText {
+	resp, _ := fetchResponseBody("api.github.com/repos/" + repo + "/tags")
 	defer resp.Body.Close()
-
+	var tagLabel *widget.RichText
 	tag, _ := processTags(resp.Body)
 	if tag == "" {
 		tag = "on-prem mode"
 	}
-	if tag != ui.ver && tag != "on-prem mode" && tag != "" {
+	if tag != ver && tag != "on-prem mode" && tag != "" {
 
-		ui.tagLabel = widget.NewRichText(
-			&widget.TextSegment{Text: "current version: " + ui.ver + " / main version: " + tag},
-			&widget.HyperlinkSegment{Text: ui.repo, URL: parseURL("https://github.com/" + ui.repo)},
+		tagLabel = widget.NewRichText(
+			&widget.TextSegment{Text: "current version: " + ver + " / main version: " + tag},
+			&widget.HyperlinkSegment{Text: repo, URL: parseURL("https://github.com/" + repo)},
 		)
 	} else {
-		ui.tagLabel = widget.NewRichText(
+		tagLabel = widget.NewRichText(
 			&widget.TextSegment{Text: tag},
-			&widget.HyperlinkSegment{Text: ui.repo, URL: parseURL("https://github.com/" + ui.repo)},
+			&widget.HyperlinkSegment{Text: repo, URL: parseURL("https://github.com/" + repo)},
 		)
 	}
-}
-
-func (ui *UI) updateContentContainer() {
-	resp, err := fetchResponseBody("raw.githubusercontent.com/" + ui.repo + "/main/docs/images/GoScout.png")
-	if err != nil {
-		ui.setDefaultContentContainer()
-		return
-	}
-
-	img, err := png.Decode(resp.Body)
-	if err != nil {
-		ui.setDefaultContentContainer()
-		return
-	}
-
-	ui.fyneImg = canvas.NewImageFromImage(img)
-	ui.fyneImg.FillMode = canvas.ImageFillContain
-
-	ui.fyneImg.SetMinSize(fyne.NewSize(300, 300))
-	imageContainer := container.NewVBox(layout.NewSpacer(), ui.fyneImg)
-
-	ui.contentContainer = container.NewStack(ui.sshConfigEditor, imageContainer)
-	ui.sshConfigEditor.Hide()
-	ui.label.Show()
-}
-
-func (ui *UI) setDefaultContentContainer() {
-	ui.fyneImg = nil
-	ui.label = widget.NewLabelWithStyle("GoScout ❤️s you - support the project development", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
-	ui.contentContainer = container.NewStack(ui.sshConfigEditor, container.NewCenter(ui.label))
-	ui.sshConfigEditor.Hide()
-	ui.label.Show()
+	return tagLabel
 }
 
 func newCustomMultiLineEntry(ui *UI) *customMultiLineEntry {
@@ -465,12 +408,6 @@ func (e *customMultiLineEntry) TypedShortcut(shortcut fyne.Shortcut) {
 	e.Entry.TypedShortcut(shortcut)
 }
 
-type ClickInterceptor struct {
-	widget.BaseWidget
-	ui *UI
-	t  *terminal.Terminal
-}
-
 func NewClickInterceptor(ui *UI, t *terminal.Terminal) *ClickInterceptor {
 	ci := &ClickInterceptor{ui: ui, t: t}
 	ci.ExtendBaseWidget(ci)
@@ -485,10 +422,6 @@ func (ci *ClickInterceptor) CreateRenderer() fyne.WidgetRenderer {
 // Invisible area click for boost terminal swith
 func (ci *ClickInterceptor) Tapped(*fyne.PointEvent) {
 	ci.ui.fyneWindow.Canvas().Focus(ci.t)
-}
-
-type clickInterceptorRenderer struct {
-	rect *canvas.Rectangle
 }
 
 func (r *clickInterceptorRenderer) Layout(size fyne.Size) {
