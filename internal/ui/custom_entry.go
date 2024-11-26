@@ -360,8 +360,6 @@ func processTags(body io.ReadCloser) (string, error) {
 		return "", fmt.Errorf("no tags found")
 	}
 
-	fmt.Println(tags)
-	fmt.Println(tags[0].Name)
 	return tags[0].Name, nil
 }
 
