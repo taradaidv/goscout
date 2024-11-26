@@ -362,13 +362,6 @@ func (ui *UI) SetVersion() *widget.RichText {
 	return tagLabel
 }
 
-// func newCustomMultiLineEntry(ui *UI) *customMultiLineEntry {
-// 	entry := &customMultiLineEntry{ui: ui}
-// 	entry.ExtendBaseWidget(entry)
-// 	entry.MultiLine = true
-// 	return entry
-// }
-
 func (e *customMultiLineEntry) TypedShortcut(shortcut fyne.Shortcut) {
 	if sc, ok := shortcut.(*desktop.CustomShortcut); ok {
 		if sc.KeyName == fyne.KeyS && (sc.Modifier == fyne.KeyModifierControl || sc.Modifier == fyne.KeyModifierSuper) {
