@@ -23,13 +23,6 @@ The GoScout is a UI tool for efficient and secure remote host management using s
 - **Tabs**: Supports multiple tabs, allowing you to manage several sessions or files simultaneously.
 - **UI**: [Fyne.io](https://fyne.io) toolkit is being used.
 
-## Build and Run
-
-```
-git clone https://github.com/taradaidv/goscout.git
-cd goscout && go build . && ./goscout
-```
-
 ## Persistent installation ~/go/bin and Run 
 
 ```
