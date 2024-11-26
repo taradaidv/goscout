@@ -14,6 +14,8 @@ import (
 	"golang.org/x/crypto/ssh/agent"
 )
 
+const path = "."
+
 func GetSSHHosts() ([]string, error) {
 	sshConfigPath := filepath.Join(os.Getenv("HOME"), ".ssh", "config")
 
@@ -50,7 +52,7 @@ func isSpecificHost(host string) bool {
 	return true
 }
 
-func ConnectAndListFiles(host, path string) (*sftp.Client, *ssh.Client, map[string][]FileInfo, error) {
+func Connect(host string) (*sftp.Client, *ssh.Client, map[string][]FileInfo, error) {
 	configFile, err := os.Open(filepath.Join(os.Getenv("HOME"), ".ssh", "config"))
 	if err != nil {
 		return nil, nil, nil, err
@@ -166,7 +168,16 @@ func ConnectAndListFiles(host, path string) (*sftp.Client, *ssh.Client, map[stri
 
 		ncc, chans, reqs, err := ssh.NewClientConn(targetConn, hostname+":"+port, sshConfig)
 		if err != nil {
-			return nil, nil, nil, err
+			fmt.Print("Enter password: ")
+			var password string
+			fmt.Scanln(&password)
+			authMethods = append(authMethods, ssh.Password(password))
+			sshConfig.Auth = authMethods
+
+			ncc, chans, reqs, err = ssh.NewClientConn(targetConn, hostname+":"+port, sshConfig)
+			if err != nil {
+				return nil, nil, nil, err
+			}
 		}
 		sshClient := ssh.NewClient(ncc, chans, reqs)
 
@@ -194,7 +205,16 @@ func ConnectAndListFiles(host, path string) (*sftp.Client, *ssh.Client, map[stri
 
 	sshClient, err := ssh.Dial("tcp", hostname+":"+port, sshConfig)
 	if err != nil {
-		return nil, nil, nil, err
+		fmt.Print("Enter password: ")
+		var password string
+		fmt.Scanln(&password)
+		authMethods = append(authMethods, ssh.Password(password))
+		sshConfig.Auth = authMethods
+
+		sshClient, err = ssh.Dial("tcp", hostname+":"+port, sshConfig)
+		if err != nil {
+			return nil, nil, nil, err
+		}
 	}
 
 	sftpClient, err := sftp.NewClient(sshClient)
@@ -211,7 +231,6 @@ func ConnectAndListFiles(host, path string) (*sftp.Client, *ssh.Client, map[stri
 	}
 
 	return sftpClient, sshClient, listings, nil
-
 }
 
 type FileInfo struct {

@@ -28,7 +28,7 @@ type UI struct {
 	entryTexts       map[int]*customMultiLineEntry
 	entryFiles       map[int]*widget.Entry
 	sshConfigEditor  *saveSSHconfig
-	logsLabel        *widget.Label
+	logsLabel        *widget.Entry
 	connectionTab    *container.TabItem
 	bottomConnection *fyne.Container
 }

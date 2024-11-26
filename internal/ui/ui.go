@@ -34,40 +34,6 @@ func (ui *UI) SetHosts() {
 	ui.fyneSelect.Refresh()
 }
 
-func (ui *UI) setBottom() {
-
-	var (
-		fyneImg *canvas.Image
-		banner  *widget.Label
-	)
-	resp, _ := fetchResponseBody("raw.githubusercontent.com/" + repo + "/main/docs/images/TON.png")
-	img, err := png.Decode(resp.Body)
-
-	if err == nil {
-		fyneImg = canvas.NewImageFromImage(img)
-		fyneImg.FillMode = canvas.ImageFillContain
-		fyneImg.SetMinSize(fyne.NewSize(72, 72))
-	} else {
-		banner = widget.NewLabelWithStyle("GoScout ❤️s you", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
-		ui.logsLabel.Wrapping = fyne.TextWrapWord
-	}
-
-	ui.logsLabel.Wrapping = fyne.TextWrapWord
-	leftBottomContainer := container.NewBorder(
-		nil,
-		nil,
-		nil,
-		ui.SetVersion(),
-	)
-
-	if err == nil {
-		ui.bottomConnection = container.NewBorder(nil, nil, leftBottomContainer, fyneImg)
-	} else {
-		ui.bottomConnection = container.NewBorder(nil, nil, leftBottomContainer, banner)
-	}
-	ui.connectionTab.Content = container.NewBorder(container.NewVBox(ui.fyneSelect), ui.bottomConnection, nil, nil, container.NewVScroll(ui.logsLabel))
-}
-
 func SetupWindow(fyneWindow fyne.Window, cfg *Config) {
 	ui := &UI{
 		fyneWindow:       fyneWindow,
@@ -80,7 +46,7 @@ func SetupWindow(fyneWindow fyne.Window, cfg *Config) {
 		entryTexts:       map[int]*customMultiLineEntry{},
 		entryFiles:       map[int]*widget.Entry{},
 		sshConfigEditor:  nil,
-		logsLabel:        &widget.Label{},
+		logsLabel:        &widget.Entry{},
 		connectionTab:    &container.TabItem{},
 		bottomConnection: &fyne.Container{},
 	}
@@ -94,13 +60,14 @@ func SetupWindow(fyneWindow fyne.Window, cfg *Config) {
 	ui.fyneSelect.OnChanged = func(selected string) {
 		go ui.connectToHost(selected)
 	}
-
+	ui.fyneSelect.PlaceHolder = "lineup of available hosts"
 	ui.connectionTab = container.NewTabItem("Hosts", nil)
 	ui.connectionTab.Icon = theme.ComputerIcon()
 
 	if len(ui.fyneTabs.Items) == 0 {
 		go ui.SetHosts()
 		go ui.setBottom()
+		ui.logsLabel.Disabled()
 		ui.connectionTab.Content = container.NewBorder(container.NewVBox(ui.fyneSelect), nil, nil, nil, container.NewVScroll(ui.logsLabel))
 		ui.fyneTabs.Append(ui.connectionTab)
 
@@ -138,7 +105,7 @@ func (ui *UI) connectToHost(host string) *container.TabItem {
 		return nil
 	}
 
-	sftpClient, sshClient, treeData, err := scoutssh.ConnectAndListFiles(host, ".")
+	sftpClient, sshClient, treeData, err := scoutssh.Connect(host)
 	if err != nil {
 		ui.log(host, err.Error())
 		return nil
@@ -234,6 +201,39 @@ func getPreviousDirectory(path string) string {
 	return path[:lastSlashIndex+1]
 }
 
+func (ui *UI) setBottom() {
+
+	var (
+		fyneImg *canvas.Image
+		banner  *widget.Label
+	)
+	resp, _ := fetchResponseBody("raw.githubusercontent.com/" + repo + "/main/docs/images/TON.png")
+	img, err := png.Decode(resp.Body)
+
+	if err == nil {
+		fyneImg = canvas.NewImageFromImage(img)
+		fyneImg.FillMode = canvas.ImageFillContain
+		fyneImg.SetMinSize(fyne.NewSize(72, 72))
+	} else {
+		banner = widget.NewLabelWithStyle("GoScout ❤️s you", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
+		ui.logsLabel.Wrapping = fyne.TextWrapWord
+	}
+
+	ui.logsLabel.Wrapping = fyne.TextWrapWord
+	leftBottomContainer := container.NewBorder(
+		nil,
+		nil,
+		nil,
+		ui.SetVersion(),
+	)
+
+	if err == nil {
+		ui.bottomConnection = container.NewBorder(nil, nil, leftBottomContainer, fyneImg)
+	} else {
+		ui.bottomConnection = container.NewBorder(nil, nil, leftBottomContainer, banner)
+	}
+	ui.connectionTab.Content = container.NewBorder(container.NewVBox(ui.fyneSelect), ui.bottomConnection, nil, nil, container.NewVScroll(ui.logsLabel))
+}
 func (ui *UI) components(params UIParams) (fyne.CanvasObject, fyne.CanvasObject) {
 	toolbar := widget.NewToolbar(
 		widget.NewToolbarAction(theme.HomeIcon(), func() {
