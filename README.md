@@ -13,6 +13,9 @@ The GoScout is a UI tool for efficient and secure remote host management using s
 
 <p align="center"><img src="docs/images/screenshot.png" alt="GoScout"></p>
 
+![Password input](docs/images/screenshot_1.png)
+![Config editor](docs/images/screenshot_2.png)
+
 ## Features
 - **Go**: Fully written in Go, ensuring high performance, reliability, and cross-platform compatibility.
 - **Hotkeys**: Text tweaked in the SSH config and file editor gets saved with the hotkeys CMD+S or CTRL+S.
