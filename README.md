@@ -70,6 +70,8 @@ This small utility is just the beginning of a larger project, and we need your h
 [TON Wallet address]()  
 UQDqFCrP01iTMfSFBHXFC-Q6S3CfsrCunVBy7DxWPYcxMsND
 
-💙 [ACKNOWLEDGEMENTS](./CREDITS.md)
+💙
+
+[ACKNOWLEDGEMENTS](./CREDITS.md)
 
 </div>
