@@ -4,9 +4,10 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"net"
+	"runtime"
 	"sync"
 
-	"net"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -23,19 +24,28 @@ import (
 
 const path = "."
 
-func GetSSHHosts() ([]string, error) {
-	sshConfigPath := filepath.Join(os.Getenv("HOME"), ".ssh", "config")
+var homeDir string
 
-	file, err := os.Open(sshConfigPath)
+func init() {
+	var err error
+	homeDir, err = os.UserHomeDir()
 	if err != nil {
-		return nil, fmt.Errorf("opening SSH configuration: %w", err)
+		fmt.Printf("Error getting user home directory: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func GetSSHHosts() ([]string, string, error) {
+	file, err := os.Open(filepath.Join(homeDir, ".ssh", "config"))
+	if err != nil {
+		return nil, "", fmt.Errorf("opening SSH configuration: %w", err)
 	}
 	defer file.Close()
 
 	configFile := bufio.NewReader(file)
 	cfg, err := ssh_config.Decode(configFile)
 	if err != nil {
-		return nil, fmt.Errorf("parsing SSH configuration: %w", err)
+		return nil, "", fmt.Errorf("parsing SSH configuration: %w", err)
 	}
 
 	var hosts []string
@@ -47,7 +57,7 @@ func GetSSHHosts() ([]string, error) {
 			}
 		}
 	}
-	return hosts, nil
+	return hosts, homeDir, nil
 }
 
 func isSpecificHost(host string) bool {
@@ -58,9 +68,26 @@ func isSpecificHost(host string) bool {
 	}
 	return true
 }
+func getSSHAgent() (net.Conn, error) {
+	if runtime.GOOS == "windows" {
+		// TODO
+		return nil, fmt.Errorf("SSH agent support for Windows is not implemented")
+	}
+
+	sshAgentSock := os.Getenv("SSH_AUTH_SOCK")
+	if sshAgentSock == "" {
+		return nil, fmt.Errorf("SSH_AUTH_SOCK is not set")
+	}
+
+	sshAgent, err := net.Dial("unix", sshAgentSock)
+	if err != nil {
+		return nil, err
+	}
+	return sshAgent, nil
+}
 
 func Connect(w fyne.Window, host, secret string) (*sftp.Client, *ssh.Client, map[string][]FileInfo, error) {
-	configFile, err := os.Open(filepath.Join(os.Getenv("HOME"), ".ssh", "config"))
+	configFile, err := os.Open(filepath.Join(homeDir, ".ssh", "config"))
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -82,7 +109,7 @@ func Connect(w fyne.Window, host, secret string) (*sftp.Client, *ssh.Client, map
 	identity, _ := cfg.Get(host, "IdentityFile")
 	if identity != "" {
 		if identity[:2] == "~/" {
-			identity = filepath.Join(os.Getenv("HOME"), identity[2:])
+			identity = filepath.Join(homeDir, identity[2:])
 		}
 		key, err := os.ReadFile(identity)
 		if err != nil {
@@ -94,12 +121,7 @@ func Connect(w fyne.Window, host, secret string) (*sftp.Client, *ssh.Client, map
 		}
 		authMethods = append(authMethods, ssh.PublicKeys(signer))
 	} else {
-		sshAgentSock := os.Getenv("SSH_AUTH_SOCK")
-		if sshAgentSock == "" {
-			return nil, nil, nil, fmt.Errorf("SSH_AUTH_SOCK is not set")
-		}
-
-		sshAgent, err := net.Dial("unix", sshAgentSock)
+		sshAgent, err := getSSHAgent()
 		if err != nil {
 			return nil, nil, nil, err
 		}

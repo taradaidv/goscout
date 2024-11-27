@@ -9,7 +9,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-func NewMouseDetectingLabel(ui *UI, isBranch bool, entryFile *widget.Entry, entryText *customMultiLineEntry) *MouseDetectingLabel {
+func NewMouseDetectingLabel(ui *UI, isBranch bool, entryFile *widget.Entry, entryText *CustomEntry) *MouseDetectingLabel {
 	label := &MouseDetectingLabel{
 		Label:     *widget.NewLabel(""),
 		isBranch:  isBranch,
@@ -49,9 +49,9 @@ func (m *MouseDetectingLabel) showContextMenu(e *desktop.MouseEvent) {
 	}
 }
 
-func (ui *UI) handleSelection(fullPath string) *customMultiLineEntry {
+func (ui *UI) handleSelection(fullPath string) *widget.Entry {
 	selectedTabIndex := ui.fyneTabs.SelectedIndex()
-	entryText := &customMultiLineEntry{}
+	entryText := &widget.Entry{}
 
 	fileInfo, err := ui.activeSFTP[selectedTabIndex].Stat(fullPath)
 	if err != nil {

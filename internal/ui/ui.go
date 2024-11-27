@@ -22,14 +22,17 @@ const (
 	configFile = ".goscout.json"
 )
 
+var homeDir string
+
 func (ui *UI) SetHosts() {
-	hosts, err := scoutssh.GetSSHHosts()
+	hosts, home, err := scoutssh.GetSSHHosts()
 	if err != nil {
 
 		dialog.ShowError(err, ui.fyneWindow)
 		ui.fyneWindow.Close()
 	}
-	hosts = append(hosts, "[edit ➜ ~/.ssh/config]")
+	homeDir = home
+	hosts = append(hosts, "[edit ➜ "+homeDir+"/.ssh/config")
 	ui.fyneSelect.Options = hosts
 	ui.fyneSelect.Refresh()
 }
@@ -43,8 +46,6 @@ func SetupWindow(fyneWindow fyne.Window, cfg *Config) {
 		openTabs:         []string{},
 		activeSFTP:       make(map[int]*sftp.Client),
 		ItemStore:        map[string]*TreeObject{},
-		entryTexts:       map[int]*customMultiLineEntry{},
-		entryFiles:       map[int]*widget.Entry{},
 		sshConfigEditor:  nil,
 		logsLabel:        widget.NewMultiLineEntry(),
 		connectionTab:    &container.TabItem{},
@@ -133,17 +134,21 @@ func (ui *UI) connectToHost(host string) *container.TabItem {
 
 	ui.activeSFTP[len(ui.fyneTabs.Items)] = sftpClient
 	ui.log(host, "connected")
-	entryFile := widget.NewEntry()
-	entryFile.SetPlaceHolder("entry path ...")
 
-	entryText := &customMultiLineEntry{}
-
-	ui.entryFiles[len(ui.fyneTabs.Items)] = entryFile
-	ui.entryTexts[len(ui.fyneTabs.Items)] = entryText
-
+	params := UIParams{
+		Terminal: terminal,
+		TreeData: treeData,
+		data: &CustomEntry{
+			Entry:      widget.Entry{},
+			path:       &widget.Entry{},
+			sftpClient: sftpClient,
+		},
+	}
+	params.data.Entry.MultiLine = true
+	params.data.Entry.ExtendBaseWidget(params.data)
 	var split *container.Split
-	entryFile.OnSubmitted = func(fullPath string) {
-		entryFile.SetText(fullPath)
+	params.data.path.OnSubmitted = func(fullPath string) {
+		params.data.path.SetText(fullPath)
 		if strings.HasSuffix(fullPath, "/") || fullPath == "." {
 			tabID := ui.fyneTabs.SelectedIndex()
 			treeData, err := scoutssh.FetchSFTPData(ui.activeSFTP[tabID], fullPath)
@@ -151,12 +156,7 @@ func (ui *UI) connectToHost(host string) *container.TabItem {
 				ui.notifyError(fmt.Sprintf("Failed to list files: %v", err))
 				return
 			}
-			params := UIParams{
-				Terminal:  terminal,
-				TreeData:  treeData,
-				EntryFile: entryFile,
-				EntryText: entryText,
-			}
+			params.TreeData = treeData
 
 			split = container.NewHSplit(ui.components(params))
 			split.SetOffset(ui.cfg.SplitOffset)
@@ -165,18 +165,13 @@ func (ui *UI) connectToHost(host string) *container.TabItem {
 			ui.fyneTabs.Refresh()
 		} else {
 			newEntryText := ui.handleSelection(fullPath)
-			entryText.SetText(newEntryText.Text)
-			entryText.TextStyle = newEntryText.TextStyle
-			entryText.Refresh()
+			params.data.SetText(newEntryText.Text)
+			params.data.TextStyle = newEntryText.TextStyle
+			params.data.Refresh()
 		}
 	}
 
-	params := UIParams{
-		Terminal:  terminal,
-		TreeData:  treeData,
-		EntryFile: entryFile,
-		EntryText: entryText,
-	}
+	params.data.path.SetPlaceHolder("entry path ...")
 
 	split = container.NewHSplit(ui.components(params))
 	split.SetOffset(ui.cfg.SplitOffset)
@@ -245,22 +240,22 @@ func (ui *UI) setBottom() {
 func (ui *UI) components(params UIParams) (fyne.CanvasObject, fyne.CanvasObject) {
 	toolbar := widget.NewToolbar(
 		widget.NewToolbarAction(theme.HomeIcon(), func() {
-			params.EntryFile.OnSubmitted(".")
+			params.data.path.OnSubmitted(".")
 		}),
 		widget.NewToolbarAction(theme.MenuIcon(), func() {
-			params.EntryFile.OnSubmitted("/")
+			params.data.path.OnSubmitted("/")
 		}),
 		widget.NewToolbarAction(theme.MoveUpIcon(), func() {
-			path := getPreviousDirectory((params.EntryFile.Text))
-			params.EntryFile.SetText(path)
-			params.EntryFile.OnSubmitted(path)
+			path := getPreviousDirectory((params.data.path.Text))
+			params.data.path.SetText(path)
+			params.data.path.OnSubmitted(path)
 
 		}),
 	)
 
 	leftContent := container.NewBorder(
 		toolbar, nil, nil, nil,
-		container.NewVScroll(ui.createList(params.TreeData, params.EntryFile, params.EntryText)),
+		container.NewVScroll(ui.createList(params.TreeData, params.data.path, params.data)),
 	)
 
 	overlay := NewClickInterceptor(ui, params.Terminal)
@@ -269,12 +264,12 @@ func (ui *UI) components(params UIParams) (fyne.CanvasObject, fyne.CanvasObject)
 	termWithOverlay := container.NewStack(params.Terminal, overlay)
 
 	term := container.NewVSplit(
-		container.NewVScroll(params.EntryText),
+		container.NewVScroll(params.data),
 		termWithOverlay,
 	)
 
 	rightContent := container.NewBorder(
-		params.EntryFile, nil, nil, nil,
+		params.data.path, nil, nil, nil,
 		term,
 	)
 
