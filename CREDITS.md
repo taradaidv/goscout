@@ -1,8 +1,8 @@
-### Sponsored by :
+#### Sponsored by :
  - crypt0ninja
  - ph4ntom
-### Testing:
+#### Testing:
  - Mikhail Isaev (ismvru)
-### Thx to:
+#### Thx to:
  - Hans Müller
  - Luca Rossi
