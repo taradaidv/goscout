@@ -60,8 +60,16 @@ Already planned is:
 This small utility is just the beginning of a larger project, and we need your help to maintain and expand the entire infrastructure. Join us in building something great!
 
 <p align="center">
-  <img src="docs/images/TON.png" alt="GoScout" width="30%">
-
-  [TON Wallet address](https://ton.org)  
-  UQDqFCrP01iTMfSFBHXFC-Q6S3CfsrCunVBy7DxWPYcxMsND
+  <a href="https://t.me/wallet">
+    <img src="./docs/images/TON.png" alt="GoScout Wallet address" width="30%">
+  </a>
 </p>
+
+<div align="center">
+
+[TON Wallet address]()  
+UQDqFCrP01iTMfSFBHXFC-Q6S3CfsrCunVBy7DxWPYcxMsND
+
+[ACKNOWLEDGEMENTS ❤️](./CREDITS.md)
+
+</div>
