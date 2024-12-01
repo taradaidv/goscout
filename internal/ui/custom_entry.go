@@ -1,12 +1,15 @@
 package ui
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"goscout/internal/scoutssh"
 	"io"
 	"net/http"
 	"net/url"
+	"runtime"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -15,7 +18,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -29,14 +31,6 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func getConfigFilePath() (string, error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", errors.Wrap(err, "getting user home directory")
-	}
-	return filepath.Join(homeDir, configFile), nil
-}
-
 func LoadConfig() (*Config, error) {
 	defaultConfig := &Config{
 		WindowWidth:  800.0,
@@ -45,12 +39,7 @@ func LoadConfig() (*Config, error) {
 		OpenTabs:     []string{},
 	}
 
-	configFilePath, err := getConfigFilePath()
-	if err != nil {
-		return nil, err
-	}
-
-	file, err := os.Open(configFilePath)
+	file, err := os.Open(filepath.Join(scoutssh.LocalHome, configFile))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return defaultConfig, nil
@@ -72,57 +61,60 @@ func LoadConfig() (*Config, error) {
 }
 
 func SaveConfig(config *Config) error {
-	configFilePath, err := getConfigFilePath()
-	if err != nil {
-		return err
-	}
 
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return errors.Wrap(err, "marshalling config")
 	}
 
-	return errors.Wrap(os.WriteFile(configFilePath, data, 0644), "writing config file")
+	return errors.Wrap(os.WriteFile(filepath.Join(scoutssh.LocalHome, configFile), data, 0644), "writing config file")
 }
 
-func (ui *UI) saveFile() {
-	selectedTabIndex := ui.fyneTabs.SelectedIndex()
-	entryText := ui.entryTexts[selectedTabIndex]
-	entryFile := ui.entryFiles[selectedTabIndex]
-
-	if entryText == nil || entryFile == nil {
-		ui.notifyError("No entry text or file path found for the active tab")
+func (e *CustomEntry) saveFile() {
+	if e.path == nil {
+		e.Entry.SetText("No entry file path found for the active tab")
 		return
 	}
 
-	sftpClient := ui.activeSFTP[selectedTabIndex]
-	filePath := entryFile.Text
-
-	file, err := sftpClient.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC)
+	file, err := e.sftpClient.OpenFile(e.path.Text, os.O_WRONLY|os.O_CREATE|os.O_TRUNC)
 	if err != nil {
-		ui.notifyError(fmt.Sprintf("Failed to open file: %v", err))
+		e.Entry.SetText(fmt.Sprintf("Failed to open file: %v", err))
 		return
 	}
 	defer file.Close()
 
-	content := entryText.Text
-	_, err = file.Write([]byte(content))
+	_, err = file.Write([]byte(e.Entry.Text))
 	if err != nil {
-		ui.notifyError(fmt.Sprintf("Failed to write to file: %v", err))
+		e.Entry.SetText(fmt.Sprintf("Failed to write to file: %v", err))
 		return
 	}
 
 	err = file.Close()
 	if err != nil {
-		ui.notifyError(fmt.Sprintf("Failed to close file: %v", err))
+		e.Entry.SetText(fmt.Sprintf("Failed to close file: %v", err))
 		return
 	}
-	entryFile.OnSubmitted(entryFile.Text)
-	ui.notifySuccess("File saved successfully")
+	e.path.OnSubmitted(e.path.Text)
+
 }
 
 func (ui *UI) setupSSHSession(host string, sshClient *ssh.Client) (*terminal.Terminal, error) {
 	session, err := sshClient.NewSession()
+	if err != nil {
+		return nil, err
+	}
+	defer session.Close()
+
+	var stdoutBuf bytes.Buffer
+	session.Stdout = &stdoutBuf
+
+	if err := session.Run("echo $HOME"); err != nil {
+		return nil, err
+	}
+	scoutssh.RemoteHome = strings.Trim(stdoutBuf.String(), "\n\r") + "/"
+
+	session.Close()
+	session, err = sshClient.NewSession()
 	if err != nil {
 		return nil, err
 	}
@@ -152,6 +144,8 @@ func (ui *UI) setupSSHSession(host string, sshClient *ssh.Client) (*terminal.Ter
 		if err := t.RunWithConnection(in, out); err != nil {
 			ui.log(host, err.Error())
 		}
+		ui.fyneTabs.RemoveIndex(ui.fyneTabs.SelectedIndex())
+		ui.log(host, "Disconnected")
 	}()
 
 	ch := make(chan terminal.Config, 1)
@@ -169,68 +163,37 @@ func (ui *UI) setupSSHSession(host string, sshClient *ssh.Client) (*terminal.Ter
 	return t, nil
 }
 
-func (ui *UI) createList(remoteTree map[string][]scoutssh.FileInfo, entryFile *widget.Entry, entryText *customMultiLineEntry) *widget.List {
-	uniqueItems := make(map[string]bool)
-	for key, children := range remoteTree {
-		uniqueItems[key] = true
+func (ui *UI) createList(remoteTree map[string][]scoutssh.FileInfo, entryFile *widget.Entry, entryText *CustomEntry) *widget.List {
+	var items []string
+	for _, children := range remoteTree {
 		for _, child := range children {
-			var childPath string
-			if key == "" {
-				childPath = child.Name
-			} else {
-				childPath = strings.TrimSuffix(key, "/") + "/" + child.Name
-			}
-			uniqueItems[childPath] = child.IsDir
-			ui.ItemStore[childPath] = &TreeObject{FileInfo: child}
+			items = append(items, child.Name)
+			ui.ItemStore[child.Name] = &TreeObject{FileInfo: child}
 		}
 	}
 
-	var items []string
-	for item := range uniqueItems {
-		items = append(items, item)
-	}
 	sort.Strings(items)
-	entryText.TextStyle = fyne.TextStyle{Bold: false, Italic: false}
 
 	list := widget.NewList(
 		func() int {
-			if len(items) > 0 {
-				return len(items) - 1
-			}
-			return 0
+			return len(items)
 		},
 		func() fyne.CanvasObject {
 			return NewMouseDetectingLabel(ui, false, entryFile, entryText)
 		},
 		func(i widget.ListItemID, obj fyne.CanvasObject) {
-			uid := items[i+1]
-			isBranch := uniqueItems[uid]
-
+			uid := items[i]
 			node := obj.(*MouseDetectingLabel)
-			node.path = uid
-			segments := strings.Split(uid, "/")
-			node.SetText(segments[len(segments)-1])
-			node.isBranch = isBranch
-			if isBranch {
-				node.TextStyle.Bold = true
-				node.Wrapping = fyne.TextWrapWord
-			} else {
-				node.TextStyle.Bold = false
-			}
-
+			node.SetText(uid)
 			if treeObject, exists := ui.ItemStore[uid]; exists {
 				info := treeObject.FileInfo
-				if info.IsLink {
-					node.SetText(info.Name + "*")
-				}
+				node.fullPath = info.FullPath
+				node.isBranch = info.IsDir
+				node.TextStyle.Bold = info.IsDir
 			}
 		},
 	)
 
-	list.OnSelected = func(id widget.ListItemID) {
-		uid := items[id]
-		entryFile.OnSubmitted(uid)
-	}
 	return list
 }
 
@@ -311,7 +274,7 @@ func (e *saveSSHconfig) TypedShortcut(shortcut fyne.Shortcut) {
 func (ui *UI) ToggleContent() {
 
 	if ui.sshConfigEditor == nil {
-		file, err := os.Open(filepath.Join(os.Getenv("HOME"), ".ssh", "config"))
+		file, err := os.Open(filepath.Join(scoutssh.LocalHome, ".ssh", "config"))
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -341,7 +304,7 @@ func fetchResponseBody(webEntry string) (*http.Response, error) {
 
 	req, err := http.NewRequest("GET", link.String(), nil)
 	if err == nil {
-		req.Header.Set("User-Agent", "GoScout")
+		req.Header.Set("User-Agent", "GoScout "+ver)
 	}
 	resp, err := httpClient.Do(req)
 
@@ -391,23 +354,6 @@ func (ui *UI) SetVersion() *widget.RichText {
 	return tagLabel
 }
 
-func newCustomMultiLineEntry(ui *UI) *customMultiLineEntry {
-	entry := &customMultiLineEntry{ui: ui}
-	entry.ExtendBaseWidget(entry)
-	entry.MultiLine = true
-	return entry
-}
-
-func (e *customMultiLineEntry) TypedShortcut(shortcut fyne.Shortcut) {
-	if sc, ok := shortcut.(*desktop.CustomShortcut); ok {
-		if sc.KeyName == fyne.KeyS && (sc.Modifier == fyne.KeyModifierControl || sc.Modifier == fyne.KeyModifierSuper) {
-			e.ui.saveFile()
-			return
-		}
-	}
-	e.Entry.TypedShortcut(shortcut)
-}
-
 func NewClickInterceptor(ui *UI, t *terminal.Terminal) *ClickInterceptor {
 	ci := &ClickInterceptor{ui: ui, t: t}
 	ci.ExtendBaseWidget(ci)
@@ -445,3 +391,25 @@ func (r *clickInterceptorRenderer) Objects() []fyne.CanvasObject {
 }
 
 func (r *clickInterceptorRenderer) Destroy() {}
+
+func (e *CustomEntry) TypedShortcut(shortcut fyne.Shortcut) {
+	if s, ok := shortcut.(*desktop.CustomShortcut); ok {
+		if isSaveShortcut(s) {
+			e.saveFile()
+		}
+	}
+	e.Entry.TypedShortcut(shortcut)
+}
+
+func isSaveShortcut(s *desktop.CustomShortcut) bool {
+	if s.KeyName != fyne.KeyS {
+		return false
+	}
+
+	switch runtime.GOOS {
+	case "darwin":
+		return s.Modifier == fyne.KeyModifierSuper
+	default:
+		return s.Modifier == fyne.KeyModifierControl
+	}
+}

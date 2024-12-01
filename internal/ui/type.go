@@ -25,8 +25,6 @@ type UI struct {
 	openTabs         []string
 	activeSFTP       map[int]*sftp.Client
 	ItemStore        map[string]*TreeObject
-	entryTexts       map[int]*customMultiLineEntry
-	entryFiles       map[int]*widget.Entry
 	sshConfigEditor  *saveSSHconfig
 	logsLabel        *widget.Entry
 	connectionTab    *container.TabItem
@@ -34,10 +32,9 @@ type UI struct {
 }
 
 type UIParams struct {
-	Terminal  *terminal.Terminal
-	TreeData  map[string][]scoutssh.FileInfo
-	EntryFile *widget.Entry
-	EntryText *customMultiLineEntry
+	Terminal *terminal.Terminal
+	TreeData map[string][]scoutssh.FileInfo
+	data     *CustomEntry
 }
 
 type UIComponents struct {
@@ -49,9 +46,10 @@ type UIComponents struct {
 	Term            fyne.CanvasObject
 }
 
-type customMultiLineEntry struct {
+type CustomEntry struct {
 	widget.Entry
-	ui *UI
+	path       *widget.Entry
+	sftpClient *sftp.Client
 }
 
 type saveSSHconfig struct {
@@ -83,9 +81,9 @@ type Config struct {
 
 type MouseDetectingLabel struct {
 	widget.Label
-	path      string
+	fullPath  string
 	isBranch  bool
 	entryFile *widget.Entry
-	entryText *customMultiLineEntry
+	entryText *CustomEntry
 	ui        *UI
 }
