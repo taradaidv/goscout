@@ -76,7 +76,6 @@ type Config struct {
 	WindowWidth  float32 `json:"window_width"`
 	WindowHeight float32 `json:"window_height"`
 	SplitOffset  float64 `json:"split_offset"`
-	Secret       string  `json:"secret"`
 	OpenTabs     []string
 }
 

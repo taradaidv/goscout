@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"goscout/internal/scoutssh"
@@ -8,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"runtime"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -29,14 +31,6 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func getConfigFilePath() (string, error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", errors.Wrap(err, "getting user home directory")
-	}
-	return filepath.Join(homeDir, configFile), nil
-}
-
 func LoadConfig() (*Config, error) {
 	defaultConfig := &Config{
 		WindowWidth:  800.0,
@@ -45,12 +39,7 @@ func LoadConfig() (*Config, error) {
 		OpenTabs:     []string{},
 	}
 
-	configFilePath, err := getConfigFilePath()
-	if err != nil {
-		return nil, err
-	}
-
-	file, err := os.Open(configFilePath)
+	file, err := os.Open(filepath.Join(scoutssh.LocalHome, configFile))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return defaultConfig, nil
@@ -72,17 +61,13 @@ func LoadConfig() (*Config, error) {
 }
 
 func SaveConfig(config *Config) error {
-	configFilePath, err := getConfigFilePath()
-	if err != nil {
-		return err
-	}
 
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return errors.Wrap(err, "marshalling config")
 	}
 
-	return errors.Wrap(os.WriteFile(configFilePath, data, 0644), "writing config file")
+	return errors.Wrap(os.WriteFile(filepath.Join(scoutssh.LocalHome, configFile), data, 0644), "writing config file")
 }
 
 func (e *CustomEntry) saveFile() {
@@ -118,6 +103,21 @@ func (ui *UI) setupSSHSession(host string, sshClient *ssh.Client) (*terminal.Ter
 	if err != nil {
 		return nil, err
 	}
+	defer session.Close()
+
+	var stdoutBuf bytes.Buffer
+	session.Stdout = &stdoutBuf
+
+	if err := session.Run("echo $HOME"); err != nil {
+		return nil, err
+	}
+	scoutssh.RemoteHome = strings.Trim(stdoutBuf.String(), "\n\r") + "/"
+
+	session.Close()
+	session, err = sshClient.NewSession()
+	if err != nil {
+		return nil, err
+	}
 
 	if err := session.RequestPty("xterm", 80, 40, ssh.TerminalModes{}); err != nil {
 		return nil, err
@@ -137,7 +137,6 @@ func (ui *UI) setupSSHSession(host string, sshClient *ssh.Client) (*terminal.Ter
 		if err := session.Shell(); err != nil {
 			ui.log(host, err.Error())
 		}
-
 	}()
 
 	t := terminal.New()
@@ -275,7 +274,7 @@ func (e *saveSSHconfig) TypedShortcut(shortcut fyne.Shortcut) {
 func (ui *UI) ToggleContent() {
 
 	if ui.sshConfigEditor == nil {
-		file, err := os.Open(filepath.Join(homeDir, ".ssh", "config"))
+		file, err := os.Open(filepath.Join(scoutssh.LocalHome, ".ssh", "config"))
 		if err != nil {
 			log.Fatal(err)
 		}

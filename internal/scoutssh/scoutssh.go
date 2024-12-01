@@ -22,30 +22,28 @@ import (
 	"golang.org/x/crypto/ssh/agent"
 )
 
-const path = "."
-
-var homeDir string
+var LocalHome, RemoteHome string
 
 func init() {
 	var err error
-	homeDir, err = os.UserHomeDir()
+	LocalHome, err = os.UserHomeDir()
 	if err != nil {
 		fmt.Printf("Error getting user home directory: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func GetSSHHosts() ([]string, string, error) {
-	file, err := os.Open(filepath.Join(homeDir, ".ssh", "config"))
+func GetSSHHosts() ([]string, error) {
+	file, err := os.Open(filepath.Join(LocalHome, ".ssh", "config"))
 	if err != nil {
-		return nil, "", fmt.Errorf("opening SSH configuration: %w", err)
+		return nil, fmt.Errorf("opening SSH configuration: %w", err)
 	}
 	defer file.Close()
 
 	configFile := bufio.NewReader(file)
 	cfg, err := ssh_config.Decode(configFile)
 	if err != nil {
-		return nil, "", fmt.Errorf("parsing SSH configuration: %w", err)
+		return nil, fmt.Errorf("parsing SSH configuration: %w", err)
 	}
 
 	var hosts []string
@@ -57,7 +55,7 @@ func GetSSHHosts() ([]string, string, error) {
 			}
 		}
 	}
-	return hosts, homeDir, nil
+	return hosts, nil
 }
 
 func isSpecificHost(host string) bool {
@@ -86,20 +84,20 @@ func getSSHAgent() (net.Conn, error) {
 	return sshAgent, nil
 }
 
-func Connect(w fyne.Window, host, secret string) (*sftp.Client, *ssh.Client, map[string][]FileInfo, error) {
-	configFile, err := os.Open(filepath.Join(homeDir, ".ssh", "config"))
+func Connect(w fyne.Window, host string) (*sftp.Client, *ssh.Client, error) {
+	configFile, err := os.Open(filepath.Join(LocalHome, ".ssh", "config"))
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	defer configFile.Close()
 	cfg, err := ssh_config.Decode(configFile)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	hostname, err := cfg.Get(host, "HostName")
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	if hostname == "" {
 		hostname = host
@@ -109,50 +107,50 @@ func Connect(w fyne.Window, host, secret string) (*sftp.Client, *ssh.Client, map
 	identity, _ := cfg.Get(host, "IdentityFile")
 	if identity != "" {
 		if identity[:2] == "~/" {
-			identity = filepath.Join(homeDir, identity[2:])
+			identity = filepath.Join(LocalHome, identity[2:])
 		}
 		key, err := os.ReadFile(identity)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, err
 		}
 		signer, err := ssh.ParsePrivateKey(key)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, err
 		}
 		authMethods = append(authMethods, ssh.PublicKeys(signer))
 	} else {
 		sshAgent, err := getSSHAgent()
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, err
 		}
 		defer sshAgent.Close()
 
 		agentClient := agent.NewClient(sshAgent)
 		signers, err := agentClient.Signers()
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, err
 		}
 		if len(signers) == 0 {
-			return nil, nil, nil, fmt.Errorf("no signers found in SSH agent")
+			return nil, nil, fmt.Errorf("no signers found in SSH agent")
 		}
 		authMethods = append(authMethods, ssh.PublicKeys(signers...))
 	}
 
 	username, err := cfg.Get(host, "User")
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	if username == "" {
 		currentUser, err := user.Current()
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to get current user: %v", err)
+			return nil, nil, fmt.Errorf("failed to get current user: %v", err)
 		}
 		username = currentUser.Username
 	}
 
 	port, err := cfg.Get(host, "Port")
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	if port == "" {
 		port = "22"
@@ -168,7 +166,7 @@ func Connect(w fyne.Window, host, secret string) (*sftp.Client, *ssh.Client, map
 		if proxyUser == "" {
 			currentUser, err := user.Current()
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, nil, err
 			}
 			proxyUser = currentUser.Username
 		}
@@ -181,12 +179,12 @@ func Connect(w fyne.Window, host, secret string) (*sftp.Client, *ssh.Client, map
 
 		proxyClient, err := ssh.Dial("tcp", proxyHost+":22", proxyConfig)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, err
 		}
 
 		targetConn, err := proxyClient.Dial("tcp", hostname+":"+port)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, err
 		}
 
 		sshConfig := &ssh.ClientConfig{
@@ -197,16 +195,16 @@ func Connect(w fyne.Window, host, secret string) (*sftp.Client, *ssh.Client, map
 
 		ncc, chans, reqs, err := ssh.NewClientConn(targetConn, hostname+":"+port, sshConfig)
 		if err != nil {
-			password := RequestPassword(host, hostname, secret, w)
+			password := RequestPassword(host, hostname, w)
 			if password == "" {
-				return nil, nil, nil, errors.New("password auth decline")
+				return nil, nil, errors.New("password auth decline")
 			}
 			authMethods = append(authMethods, ssh.Password(password))
 			sshConfig.Auth = authMethods
 
 			ncc, chans, reqs, err = ssh.NewClientConn(targetConn, hostname+":"+port, sshConfig)
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, nil, err
 			}
 		}
 		sshClient := ssh.NewClient(ncc, chans, reqs)
@@ -214,17 +212,10 @@ func Connect(w fyne.Window, host, secret string) (*sftp.Client, *ssh.Client, map
 		sftpClient, err := sftp.NewClient(sshClient)
 		if err != nil {
 			sshClient.Close()
-			return nil, nil, nil, err
+			return nil, nil, err
 		}
 
-		listings, err := FetchSFTPData(sftpClient, path)
-		if err != nil {
-			sshClient.Close()
-			sftpClient.Close()
-			return nil, nil, nil, err
-		}
-
-		return sftpClient, sshClient, listings, nil
+		return sftpClient, sshClient, nil
 	}
 
 	sshConfig := &ssh.ClientConfig{
@@ -236,40 +227,33 @@ func Connect(w fyne.Window, host, secret string) (*sftp.Client, *ssh.Client, map
 	sshClient, err := ssh.Dial("tcp", hostname+":"+port, sshConfig)
 
 	if err != nil {
-		password := RequestPassword(host, hostname, secret, w)
+		password := RequestPassword(host, hostname, w)
 		if password == "" {
-			return nil, nil, nil, errors.New("password auth decline")
+			return nil, nil, errors.New("password auth decline")
 		}
 		authMethods = append(authMethods, ssh.Password(password))
 		sshConfig.Auth = authMethods
 
 		sshClient, err = ssh.Dial("tcp", hostname+":"+port, sshConfig)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, err
 		}
 	}
 
 	sftpClient, err := sftp.NewClient(sshClient)
 	if err != nil {
 		sshClient.Close()
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
-	listings, err := FetchSFTPData(sftpClient, path)
-	if err != nil {
-		sshClient.Close()
-		sftpClient.Close()
-		return nil, nil, nil, err
-	}
-
-	return sftpClient, sshClient, listings, nil
+	return sftpClient, sshClient, nil
 }
 
-func RequestPassword(host, hostname, secret string, w fyne.Window) string {
+func RequestPassword(host, hostname string, w fyne.Window) string {
 
 	passwordChan := make(chan string)
 	passwordEntry := widget.NewPasswordEntry()
-	passwordEntry.SetText(secret)
+
 	dialog.ShowCustomConfirm(host+" / "+hostname, "OK", "Cancel",
 		container.NewVBox(widget.NewLabel("ssh password auth"), passwordEntry),
 		func(ok bool) {
@@ -288,6 +272,31 @@ type FileInfo struct {
 	IsDir    bool
 	IsLink   bool
 	FullPath string
+}
+
+func RemoveSFTP(client *sftp.Client, path string) (string, error) {
+	info, err := client.Stat(path)
+	if err != nil {
+		return "", err
+	}
+
+	if info.IsDir() {
+		entries, err := client.ReadDir(path)
+		if err != nil {
+			return "", err
+		}
+
+		for _, entry := range entries {
+			_, err = RemoveSFTP(client, path+"/"+entry.Name())
+			if err != nil {
+				return "", err
+			}
+		}
+
+		return filepath.Dir(filepath.Dir(path)) + "/", client.RemoveDirectory(path)
+	}
+
+	return filepath.Dir(path) + "/", client.Remove(path)
 }
 
 func FetchSFTPData(client *sftp.Client, path string) (map[string][]FileInfo, error) {

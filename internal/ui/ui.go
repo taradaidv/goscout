@@ -3,14 +3,19 @@ package ui
 import (
 	"fmt"
 	"image/png"
+	"io"
+	"os"
+	"path"
 	"strings"
 
 	"goscout/internal/scoutssh"
+	"goscout/internal/webdav"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/pkg/sftp"
@@ -22,17 +27,14 @@ const (
 	configFile = ".goscout.json"
 )
 
-var homeDir string
-
 func (ui *UI) SetHosts() {
-	hosts, home, err := scoutssh.GetSSHHosts()
+	hosts, err := scoutssh.GetSSHHosts()
 	if err != nil {
 
 		dialog.ShowError(err, ui.fyneWindow)
 		ui.fyneWindow.Close()
 	}
-	homeDir = home
-	hosts = append(hosts, "[edit ➜ "+homeDir+"/.ssh/config")
+	hosts = append(hosts, "[edit ➜ "+scoutssh.LocalHome+"/.ssh/config")
 	ui.fyneSelect.Options = hosts
 	ui.fyneSelect.Refresh()
 }
@@ -106,7 +108,7 @@ func (ui *UI) connectToHost(host string) *container.TabItem {
 		return nil
 	}
 	ui.log(host, "connection...")
-	sftpClient, sshClient, treeData, err := scoutssh.Connect(ui.fyneWindow, host, ui.cfg.Secret)
+	sftpClient, sshClient, err := scoutssh.Connect(ui.fyneWindow, host)
 	if err != nil {
 		ui.log(host, err.Error())
 		return nil
@@ -135,6 +137,13 @@ func (ui *UI) connectToHost(host string) *container.TabItem {
 	ui.activeSFTP[len(ui.fyneTabs.Items)] = sftpClient
 	ui.log(host, "connected")
 
+	treeData, err := scoutssh.FetchSFTPData(sftpClient, scoutssh.RemoteHome)
+	if err != nil {
+		sshClient.Close()
+		sftpClient.Close()
+		return nil
+	}
+
 	params := UIParams{
 		Terminal: terminal,
 		TreeData: treeData,
@@ -149,9 +158,8 @@ func (ui *UI) connectToHost(host string) *container.TabItem {
 	var split *container.Split
 	params.data.path.OnSubmitted = func(fullPath string) {
 		params.data.path.SetText(fullPath)
-		if strings.HasSuffix(fullPath, "/") || fullPath == "." {
-			tabID := ui.fyneTabs.SelectedIndex()
-			treeData, err := scoutssh.FetchSFTPData(ui.activeSFTP[tabID], fullPath)
+		if strings.HasSuffix(fullPath, "/") {
+			treeData, err := scoutssh.FetchSFTPData(ui.activeSFTP[ui.fyneTabs.SelectedIndex()], fullPath)
 			if err != nil {
 				ui.notifyError(fmt.Sprintf("Failed to list files: %v", err))
 				return
@@ -161,7 +169,7 @@ func (ui *UI) connectToHost(host string) *container.TabItem {
 			split = container.NewHSplit(ui.components(params))
 			split.SetOffset(ui.cfg.SplitOffset)
 
-			ui.fyneTabs.Items[tabID].Content = container.NewBorder(nil, nil, nil, nil, split)
+			ui.fyneTabs.Items[ui.fyneTabs.SelectedIndex()].Content = container.NewBorder(nil, nil, nil, nil, split)
 			ui.fyneTabs.Refresh()
 		} else {
 			newEntryText := ui.handleSelection(fullPath)
@@ -171,7 +179,7 @@ func (ui *UI) connectToHost(host string) *container.TabItem {
 		}
 	}
 
-	params.data.path.SetPlaceHolder("entry path ...")
+	params.data.path.SetText(scoutssh.RemoteHome)
 
 	split = container.NewHSplit(ui.components(params))
 	split.SetOffset(ui.cfg.SplitOffset)
@@ -182,19 +190,20 @@ func (ui *UI) connectToHost(host string) *container.TabItem {
 	return remoteTab
 }
 
-func getPreviousDirectory(path string) string {
-	if path == "./" || path == "." {
-		return "./"
-	}
-
+func trimPath(path string) string {
 	if strings.HasSuffix(path, "/") {
-		path = strings.TrimSuffix(path, "/")
-	} else {
-		lastSlashIndex := strings.LastIndex(path, "/")
-		if lastSlashIndex != -1 {
-			path = path[:lastSlashIndex]
-		}
+		return path
 	}
+	lastSlashIndex := strings.LastIndex(path, "/")
+	if lastSlashIndex != -1 {
+		return path[:lastSlashIndex+1]
+	}
+	return path
+}
+
+func getPreviousDirectory(path string) string {
+	path = trimPath(path)
+	path = strings.TrimSuffix(path, "/")
 
 	lastSlashIndex := strings.LastIndex(path, "/")
 	if lastSlashIndex == -1 {
@@ -238,23 +247,64 @@ func (ui *UI) setBottom() {
 	ui.connectionTab.Content = container.NewBorder(container.NewVBox(ui.fyneSelect), ui.bottomConnection, nil, nil, container.NewVScroll(ui.logsLabel))
 }
 func (ui *UI) components(params UIParams) (fyne.CanvasObject, fyne.CanvasObject) {
+	rootButton := widget.NewButton("  /  ", func() {
+		params.data.path.OnSubmitted("/")
+	})
+	webdavButton := widget.NewButton("WebDAV", func() {
+		entryPoint := webdav.Mount(ui.activeSFTP[ui.fyneTabs.SelectedIndex()])
+		content := container.NewVBox(
+			widget.NewLabel("This is an experimental feature that starts WebDAV on the localhost without creating local folders,\nmeaning the file system is in-memory and available as long as GoScout is running."),
+			widget.NewLabel("Example for macOS:\nHit CMD+K in Finder, enter the address below with ANY creds."),
+			widget.NewHyperlink("http://"+entryPoint, parseURL("http://"+entryPoint)),
+			layout.NewSpacer(),
+		)
+		dialog.ShowCustom("Experimental GoScout - WebDAV in memory", "OK", content, ui.fyneWindow)
+	})
+
 	toolbar := widget.NewToolbar(
 		widget.NewToolbarAction(theme.HomeIcon(), func() {
-			params.data.path.OnSubmitted(".")
+			params.data.path.OnSubmitted(scoutssh.RemoteHome)
 		}),
-		widget.NewToolbarAction(theme.MenuIcon(), func() {
-			params.data.path.OnSubmitted("/")
-		}),
+
 		widget.NewToolbarAction(theme.MoveUpIcon(), func() {
 			path := getPreviousDirectory((params.data.path.Text))
 			params.data.path.SetText(path)
 			params.data.path.OnSubmitted(path)
 
 		}),
+		widget.NewToolbarAction(theme.DownloadIcon(), func() {
+			fileSaveDialog := dialog.NewFolderOpen(func(list fyne.ListableURI, err error) {
+				if err != nil {
+					dialog.ShowError(err, ui.fyneWindow)
+					return
+				}
+				if list == nil {
+					return
+				}
+
+				localBasePath := list.Path()
+
+				err = downloadFileOrDirectory(ui.activeSFTP[ui.fyneTabs.SelectedIndex()], params.data.path.Text, localBasePath)
+				if err != nil {
+					dialog.ShowError(err, ui.fyneWindow)
+				} else {
+					dialog.ShowInformation("Success", params.data.path.Text+"\nSaved in "+localBasePath, ui.fyneWindow)
+				}
+			}, ui.fyneWindow)
+
+			screenSize := ui.fyneWindow.Canvas().Size()
+			fileSaveDialog.Resize(screenSize)
+			fileSaveDialog.Show()
+		}),
+	)
+	toolbarContainer := container.NewHBox(
+		rootButton,
+		toolbar,
+		webdavButton,
 	)
 
 	leftContent := container.NewBorder(
-		toolbar, nil, nil, nil,
+		toolbarContainer, nil, nil, nil,
 		container.NewVScroll(ui.createList(params.TreeData, params.data.path, params.data)),
 	)
 
@@ -274,4 +324,115 @@ func (ui *UI) components(params UIParams) (fyne.CanvasObject, fyne.CanvasObject)
 	)
 
 	return leftContent, rightContent
+}
+
+func isDirectory(path string) bool {
+	return strings.HasSuffix(path, "/")
+}
+
+func downloadFileOrDirectory(client *sftp.Client, remotePath, localBasePath string) error {
+	if isDirectory(remotePath) {
+		localDirPath := path.Join(localBasePath, path.Base(remotePath))
+		return downloadDirectory(client, remotePath, localDirPath)
+	} else {
+		localFilePath := path.Join(localBasePath, path.Base(remotePath))
+		return downloadFile(client, remotePath, localFilePath)
+	}
+}
+
+func downloadDirectory(client *sftp.Client, remotePath, localBasePath string) error {
+	entries, err := client.ReadDir(remotePath)
+	if err != nil {
+		return fmt.Errorf("failed to read directory: %v", err)
+	}
+
+	err = os.MkdirAll(localBasePath, os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("failed to create local directory: %v", err)
+	}
+
+	for _, entry := range entries {
+		entryRemotePath := path.Join(remotePath, entry.Name())
+		entryLocalPath := path.Join(localBasePath, entry.Name())
+
+		if entry.IsDir() {
+			err = downloadDirectory(client, entryRemotePath, entryLocalPath)
+		} else {
+			err = downloadFile(client, entryRemotePath, entryLocalPath)
+		}
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+func downloadFile(client *sftp.Client, remotePath, localPath string) error {
+	srcFile, err := client.Open(remotePath)
+	if err != nil {
+		return fmt.Errorf("failed to open remote file: %v", err)
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.Create(localPath)
+	if err != nil {
+		return fmt.Errorf("failed to create local file: %v", err)
+	}
+	defer dstFile.Close()
+
+	_, err = io.Copy(dstFile, srcFile)
+	if err != nil {
+		return fmt.Errorf("failed to copy file: %v", err)
+	}
+
+	return nil
+}
+
+func uploadDirectory(client *sftp.Client, localPath, remoteBasePath string) error {
+	entries, err := os.ReadDir(localPath)
+	if err != nil {
+		return fmt.Errorf("failed to read local directory: %v", err)
+	}
+
+	err = client.MkdirAll(remoteBasePath)
+	if err != nil {
+		return fmt.Errorf("failed to create remote directory: %v", err)
+	}
+
+	for _, entry := range entries {
+		entryLocalPath := path.Join(localPath, entry.Name())
+		entryRemotePath := path.Join(remoteBasePath, entry.Name())
+
+		if entry.IsDir() {
+			err = uploadDirectory(client, entryLocalPath, entryRemotePath)
+		} else {
+			err = uploadFile(client, entryLocalPath, entryRemotePath)
+		}
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func uploadFile(client *sftp.Client, localPath, remotePath string) error {
+	srcFile, err := os.Open(localPath)
+	if err != nil {
+		return fmt.Errorf("failed to open local file: %v", err)
+	}
+	defer srcFile.Close()
+
+	dstFile, err := client.Create(remotePath)
+	if err != nil {
+		return fmt.Errorf("failed to create remote file: %v", err)
+	}
+	defer dstFile.Close()
+
+	_, err = io.Copy(dstFile, srcFile)
+	if err != nil {
+		return fmt.Errorf("failed to copy file: %v", err)
+	}
+
+	return nil
 }

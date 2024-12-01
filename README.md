@@ -25,6 +25,7 @@ The GoScout is a UI tool for efficient and secure remote host management using s
 - **Tabs**: Supports multiple tabs, allowing you to manage several sessions or files simultaneously.
 - **Themes**: Adaptive for light and dark OS themes
 - **UI**: [Fyne.io](https://fyne.io) toolkit is being used.
+- **WebDAV**: File syncing via WebDAV with a temporary in-memory file system
 
 ## Persistent installation ~/go/bin and Run 
 
@@ -47,12 +48,12 @@ Already planned is:
 |Add Kubernetes support|-|
 |Add support for detection of the host list on Windows|-|
 |Connection process output in the app window|🟢|
-|Follow symlinks|⚪️|
+|Follow symlinks|🟢|
 |Integrate with IPFS|-|
 |Mouse actions|🟢|
 |Password input support for *ssh* and *sftp*|🟢|
 |Scroll-back|⚪️|
-|Sync files and folders via native OS file manager|⚪️|
+|Sync files and folders through the native OS file manager via WebDAV|🟢|
 |...|...|
 
 

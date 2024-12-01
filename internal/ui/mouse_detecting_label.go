@@ -2,9 +2,13 @@ package ui
 
 import (
 	"fmt"
+	"goscout/internal/scoutssh"
 	"io"
+	"path"
+	"path/filepath"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/widget"
 )
@@ -31,22 +35,88 @@ func (m *MouseDetectingLabel) MouseDown(e *desktop.MouseEvent) {
 		m.showContextMenu(e)
 	}
 }
+
 func (m *MouseDetectingLabel) showContextMenu(e *desktop.MouseEvent) {
+	var menuItems []*fyne.MenuItem
+	mainPath := trimPath((m.fullPath))
 	if m.isBranch {
-		menu := fyne.NewMenu("",
-			fyne.NewMenuItem("TODO:More folder actions ...", func() {
-			}),
-		)
-		popUpMenu := widget.NewPopUpMenu(menu, m.ui.fyneWindow.Canvas())
-		popUpMenu.ShowAtPosition(e.AbsolutePosition)
+		menuItems = append(menuItems, fyne.NewMenuItem("Action in folder: "+m.fullPath, func() {
+			// Branch-specific action logic
+		}))
 	} else {
-		menu := fyne.NewMenu("",
-			fyne.NewMenuItem("TODO:More file actions ...", func() {
-			}),
-		)
-		popUpMenu := widget.NewPopUpMenu(menu, m.ui.fyneWindow.Canvas())
-		popUpMenu.ShowAtPosition(e.AbsolutePosition)
+		menuItems = append(menuItems, fyne.NewMenuItem("Action in folder: "+filepath.Dir(m.fullPath)+"/", func() {
+			// Branch-specific action logic
+		}))
 	}
+
+	// Common action for both folders and files
+	menuItems = append(menuItems, fyne.NewMenuItem("Upload file", func() {
+		fileOpenDialog := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
+			if err != nil {
+				dialog.ShowError(err, m.ui.fyneWindow)
+				return
+			}
+			if reader == nil {
+				return
+			}
+			defer reader.Close()
+
+			localPath := reader.URI().Path()
+			remotePath := path.Join(mainPath, path.Base(localPath))
+
+			err = uploadFile(m.ui.activeSFTP[m.ui.fyneTabs.SelectedIndex()], localPath, remotePath)
+			if err != nil {
+				dialog.ShowError(err, m.ui.fyneWindow)
+			} else {
+				dialog.ShowInformation("Success", "File uploaded successfully", m.ui.fyneWindow)
+				go m.entryFile.OnSubmitted(mainPath)
+			}
+		}, m.ui.fyneWindow)
+
+		screenSize := m.ui.fyneWindow.Canvas().Size()
+		fileOpenDialog.Resize(screenSize)
+		fileOpenDialog.Show()
+	}))
+
+	menuItems = append(menuItems, fyne.NewMenuItem("Upload folder", func() {
+		folderOpenDialog := dialog.NewFolderOpen(func(list fyne.ListableURI, err error) {
+			if err != nil {
+				dialog.ShowError(err, m.ui.fyneWindow)
+				return
+			}
+			if list == nil {
+				return
+			}
+
+			localPath := list.Path()
+			remotePath := path.Join(mainPath, path.Base(localPath))
+
+			err = uploadDirectory(m.ui.activeSFTP[m.ui.fyneTabs.SelectedIndex()], localPath, remotePath)
+			if err != nil {
+				dialog.ShowError(err, m.ui.fyneWindow)
+			} else {
+				dialog.ShowInformation("Success", "Directory uploaded successfully", m.ui.fyneWindow)
+				go m.entryFile.OnSubmitted(mainPath)
+			}
+		}, m.ui.fyneWindow)
+
+		screenSize := m.ui.fyneWindow.Canvas().Size()
+		folderOpenDialog.Resize(screenSize)
+		folderOpenDialog.Show()
+	}))
+
+	menuItems = append(menuItems, fyne.NewMenuItemSeparator())
+	menuItems = append(menuItems, fyne.NewMenuItem("🔴 remove: "+m.Text, func() {
+		path, err := scoutssh.RemoveSFTP(m.ui.activeSFTP[m.ui.fyneTabs.SelectedIndex()], m.fullPath)
+		if err == nil {
+			go m.entryFile.OnSubmitted(path)
+		}
+
+	}))
+
+	menu := fyne.NewMenu("", menuItems...)
+	popUpMenu := widget.NewPopUpMenu(menu, m.ui.fyneWindow.Canvas())
+	popUpMenu.ShowAtPosition(e.AbsolutePosition)
 }
 
 func (ui *UI) handleSelection(fullPath string) *widget.Entry {
