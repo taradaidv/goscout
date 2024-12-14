@@ -1,5 +1,8 @@
 
-<p align="center"><img src="docs/images/GoScout.png" alt="GoScout" width="20%"></p>
+<div align="center">
+
+[TXH / ACKNOWLEDGEMENTS](./CREDITS.md)
+</div><p align="center"><img src="docs/images/GoScout.png" alt="GoScout" width="20%"></p>
 
 # GoScout
 
@@ -12,10 +15,6 @@ The GoScout is a UI tool for efficient and secure remote host management using s
 [![Go](https://img.shields.io/badge/Go-100%25-brightgreen)](https://golang.org)
 [![Code Status](https://img.shields.io/badge/Code%20Status-active-brightgreen.svg)](https://github.com/taradaidv/goscout/tree/main)
 
-<div align="center">
-
-[TXH / ACKNOWLEDGEMENTS](./CREDITS.md)
-</div>
 
 ![GoScout](docs/images/screenshot.png)
 ![Password input](docs/images/screenshot_1.png)
