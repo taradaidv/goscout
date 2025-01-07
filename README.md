@@ -80,14 +80,7 @@ This small utility is just the beginning of a larger project, and we need your h
 - **Motivation**: Recognizing contributions to the community inspires new achievements and maintains enthusiasm for ongoing project development.
 
 You can support the project by donating, contributing code, improving documentation, or discussing issues.
-<p align="center">
-  <a href="https://t.me/wallet">
-    <img src="./docs/images/TON.png" alt="GoScout Wallet address" width="30%">
-  </a>
-</p>
 
-<div align="center">
+**TON:** `UQBesxeEBa8_xrwU8F_e-g49Cf5Hwf8Al5v0VXcDxU9hoUgM`
 
-[TON Wallet address]()  
-UQDqFCrP01iTMfSFBHXFC-Q6S3CfsrCunVBy7DxWPYcxMsND
-</div>
+**BTC:** `15WrGGwGGgDTe3iBQWvZcuFu6ZNQC9ePjU`
