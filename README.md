@@ -81,6 +81,12 @@ This small utility is just the beginning of a larger project, and we need your h
 
 You can support the project by donating, contributing code, improving documentation, or discussing issues.
 
-**TON:** `UQBesxeEBa8_xrwU8F_e-g49Cf5Hwf8Al5v0VXcDxU9hoUgM`
+**TON:**
+```
+UQBesxeEBa8_xrwU8F_e-g49Cf5Hwf8Al5v0VXcDxU9hoUgM
+```
 
-**BTC:** `15WrGGwGGgDTe3iBQWvZcuFu6ZNQC9ePjU`
+**BTC:**
+```
+15WrGGwGGgDTe3iBQWvZcuFu6ZNQC9ePjU
+```
