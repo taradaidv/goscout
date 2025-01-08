@@ -81,6 +81,8 @@ This small utility is just the beginning of a larger project, and we need your h
 
 You can support the project by donating, contributing code, improving documentation, or discussing issues.
 
+## Donation Wallet Addresses
+
 **TON:**
 ```
 UQBesxeEBa8_xrwU8F_e-g49Cf5Hwf8Al5v0VXcDxU9hoUgM
