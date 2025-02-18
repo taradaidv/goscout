@@ -35,7 +35,7 @@ func LoadConfig() (*Config, error) {
 	defaultConfig := &Config{
 		WindowWidth:  800.0,
 		WindowHeight: 600.0,
-		SplitOffset:  0.3,
+		SplitOffsets: make(map[string]float64),
 		OpenTabs:     []string{},
 	}
 
@@ -61,7 +61,6 @@ func LoadConfig() (*Config, error) {
 }
 
 func SaveConfig(config *Config) error {
-
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return errors.Wrap(err, "marshalling config")
@@ -204,6 +203,9 @@ func (ui *UI) saveState() {
 	for _, tab := range ui.fyneTabs.Items {
 		if tab.Icon == nil {
 			ui.cfg.OpenTabs = append(ui.cfg.OpenTabs, tab.Text)
+			if split := findSplitContainer(tab.Content); split != nil {
+				ui.cfg.SplitOffsets[tab.Text] = split.Offset
+			}
 		}
 	}
 
@@ -211,6 +213,20 @@ func (ui *UI) saveState() {
 	if err != nil {
 		log.Printf("Failed to save config: %v", err)
 	}
+}
+
+func findSplitContainer(content fyne.CanvasObject) *container.Split {
+	switch c := content.(type) {
+	case *container.Split:
+		return c
+	case *fyne.Container:
+		for _, obj := range c.Objects {
+			if split := findSplitContainer(obj); split != nil {
+				return split
+			}
+		}
+	}
+	return nil
 }
 
 func isReadable(content []byte) bool {

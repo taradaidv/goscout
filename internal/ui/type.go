@@ -73,10 +73,10 @@ type clickInterceptorRenderer struct {
 }
 
 type Config struct {
-	WindowWidth  float32 `json:"window_width"`
-	WindowHeight float32 `json:"window_height"`
-	SplitOffset  float64 `json:"split_offset"`
-	OpenTabs     []string
+	WindowWidth  float32            `json:"window_width"`
+	WindowHeight float32            `json:"window_height"`
+	SplitOffsets map[string]float64 `json:"split_offsets"`
+	OpenTabs     []string           `json:"open_tabs"`
 }
 
 type MouseDetectingLabel struct {

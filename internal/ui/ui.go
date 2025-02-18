@@ -23,7 +23,7 @@ import (
 
 const (
 	repo       = "taradaidv/goscout"
-	ver        = "v0.3.0"
+	ver        = "v0.3.1"
 	configFile = ".goscout.json"
 )
 
@@ -167,7 +167,7 @@ func (ui *UI) connectToHost(host string) *container.TabItem {
 			params.TreeData = treeData
 
 			split = container.NewHSplit(ui.components(params))
-			split.SetOffset(ui.cfg.SplitOffset)
+			split.SetOffset(ui.cfg.SplitOffsets[host])
 
 			ui.fyneTabs.Items[ui.fyneTabs.SelectedIndex()].Content = container.NewBorder(nil, nil, nil, nil, split)
 			ui.fyneTabs.Refresh()
@@ -182,7 +182,7 @@ func (ui *UI) connectToHost(host string) *container.TabItem {
 	params.data.path.SetText(scoutssh.RemoteHome)
 
 	split = container.NewHSplit(ui.components(params))
-	split.SetOffset(ui.cfg.SplitOffset)
+	split.SetOffset(ui.cfg.SplitOffsets[host])
 
 	remoteTab := container.NewTabItem(host, container.NewBorder(nil, nil, nil, nil, split))
 	ui.fyneTabs.Append(remoteTab)
