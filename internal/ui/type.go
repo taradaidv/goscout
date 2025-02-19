@@ -2,6 +2,7 @@ package ui
 
 import (
 	"goscout/internal/scoutssh"
+	"net"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -29,6 +30,8 @@ type UI struct {
 	logsLabel        *widget.Entry
 	connectionTab    *container.TabItem
 	bottomConnection *fyne.Container
+	webdavActive     bool
+	webdavListener   net.Listener // Add this field
 }
 
 type UIParams struct {
@@ -73,10 +76,10 @@ type clickInterceptorRenderer struct {
 }
 
 type Config struct {
-	WindowWidth  float32 `json:"window_width"`
-	WindowHeight float32 `json:"window_height"`
-	SplitOffset  float64 `json:"split_offset"`
-	OpenTabs     []string
+	WindowWidth  float32            `json:"window_width"`
+	WindowHeight float32            `json:"window_height"`
+	SplitOffsets map[string]float64 `json:"split_offsets"`
+	OpenTabs     []string           `json:"open_tabs"`
 }
 
 type MouseDetectingLabel struct {

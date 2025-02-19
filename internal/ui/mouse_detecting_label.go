@@ -130,7 +130,7 @@ func (ui *UI) handleSelection(fullPath string) *widget.Entry {
 		return entryText
 	}
 
-	if fileInfo.Size() > 10*1024 {
+	if fileInfo.Size() > 32*1024 {
 		var sizeStr string
 		const unit = 1024
 		if fileInfo.Size() < unit {

@@ -23,7 +23,7 @@ import (
 
 const (
 	repo       = "taradaidv/goscout"
-	ver        = "v0.3.0"
+	ver        = "v0.3.1"
 	configFile = ".goscout.json"
 )
 
@@ -52,6 +52,7 @@ func SetupWindow(fyneWindow fyne.Window, cfg *Config) {
 		logsLabel:        widget.NewMultiLineEntry(),
 		connectionTab:    &container.TabItem{},
 		bottomConnection: &fyne.Container{},
+		webdavActive:     false, // Initialize the field
 	}
 
 	defer ui.fyneWindow.Close()
@@ -167,7 +168,7 @@ func (ui *UI) connectToHost(host string) *container.TabItem {
 			params.TreeData = treeData
 
 			split = container.NewHSplit(ui.components(params))
-			split.SetOffset(ui.cfg.SplitOffset)
+			split.SetOffset(ui.cfg.SplitOffsets[host])
 
 			ui.fyneTabs.Items[ui.fyneTabs.SelectedIndex()].Content = container.NewBorder(nil, nil, nil, nil, split)
 			ui.fyneTabs.Refresh()
@@ -182,7 +183,7 @@ func (ui *UI) connectToHost(host string) *container.TabItem {
 	params.data.path.SetText(scoutssh.RemoteHome)
 
 	split = container.NewHSplit(ui.components(params))
-	split.SetOffset(ui.cfg.SplitOffset)
+	split.SetOffset(ui.cfg.SplitOffsets[host])
 
 	remoteTab := container.NewTabItem(host, container.NewBorder(nil, nil, nil, nil, split))
 	ui.fyneTabs.Append(remoteTab)
@@ -211,6 +212,14 @@ func getPreviousDirectory(path string) string {
 	}
 
 	return path[:lastSlashIndex+1]
+}
+
+func (ui *UI) stopWebDAV() {
+	if ui.webdavListener != nil {
+		ui.webdavListener.Close()
+		ui.webdavListener = nil
+		ui.webdavActive = false
+	}
 }
 
 func (ui *UI) setBottom() {
@@ -250,27 +259,35 @@ func (ui *UI) components(params UIParams) (fyne.CanvasObject, fyne.CanvasObject)
 	rootButton := widget.NewButton("  /  ", func() {
 		params.data.path.OnSubmitted("/")
 	})
-	webdavButton := widget.NewButton("WebDAV", func() {
-		entryPoint := webdav.Mount(ui.activeSFTP[ui.fyneTabs.SelectedIndex()])
-		content := container.NewVBox(
-			widget.NewLabel("This is an experimental feature that starts WebDAV on the localhost without creating local folders,\nmeaning the file system is in-memory and available as long as GoScout is running."),
-			widget.NewLabel("Example for macOS:\nHit CMD+K in Finder, enter the address below with ANY creds."),
-			widget.NewHyperlink("http://"+entryPoint, parseURL("http://"+entryPoint)),
-			layout.NewSpacer(),
-		)
-		dialog.ShowCustom("Experimental GoScout - WebDAV in memory", "OK", content, ui.fyneWindow)
+
+	var webdavButton *widget.Button
+	webdavButton = widget.NewButton("Start WebDAV", func() {
+		if ui.webdavActive {
+			ui.stopWebDAV()
+			webdavButton.SetText("Start WebDAV")
+		} else {
+			entryPoint, listener := webdav.Mount(ui.activeSFTP[ui.fyneTabs.SelectedIndex()])
+			ui.webdavListener = listener
+			content := container.NewVBox(
+				widget.NewLabel("This is an experimental feature that starts WebDAV on the localhost without creating local folders,\nmeaning the file system is in-memory and available as long as GoScout is running."),
+				widget.NewLabel("Example for macOS:\nHit CMD+K in Finder, enter the address below with ANY creds."),
+				widget.NewHyperlink("http://"+entryPoint, parseURL("http://"+entryPoint)),
+				layout.NewSpacer(),
+			)
+			dialog.ShowCustom("Experimental GoScout - WebDAV in memory", "OK", content, ui.fyneWindow)
+			webdavButton.SetText("Stop WebDAV")
+			ui.webdavActive = true
+		}
 	})
 
 	toolbar := widget.NewToolbar(
 		widget.NewToolbarAction(theme.HomeIcon(), func() {
 			params.data.path.OnSubmitted(scoutssh.RemoteHome)
 		}),
-
 		widget.NewToolbarAction(theme.MoveUpIcon(), func() {
 			path := getPreviousDirectory((params.data.path.Text))
 			params.data.path.SetText(path)
 			params.data.path.OnSubmitted(path)
-
 		}),
 		widget.NewToolbarAction(theme.DownloadIcon(), func() {
 			fileSaveDialog := dialog.NewFolderOpen(func(list fyne.ListableURI, err error) {
@@ -297,6 +314,7 @@ func (ui *UI) components(params UIParams) (fyne.CanvasObject, fyne.CanvasObject)
 			fileSaveDialog.Show()
 		}),
 	)
+
 	toolbarContainer := container.NewHBox(
 		rootButton,
 		toolbar,
