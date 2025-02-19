@@ -31,13 +31,17 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func LoadConfig() (*Config, error) {
-	defaultConfig := &Config{
+func DefaultConfig() *Config {
+	return &Config{
 		WindowWidth:  800.0,
 		WindowHeight: 600.0,
 		SplitOffsets: make(map[string]float64),
 		OpenTabs:     []string{},
 	}
+}
+
+func LoadConfig() (*Config, error) {
+	defaultConfig := DefaultConfig()
 
 	file, err := os.Open(filepath.Join(scoutssh.LocalHome, configFile))
 	if err != nil {
