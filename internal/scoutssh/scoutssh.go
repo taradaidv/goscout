@@ -68,7 +68,7 @@ func isSpecificHost(host string) bool {
 }
 func getSSHAgent() (net.Conn, error) {
 	if runtime.GOOS == "windows" {
-		// TODO
+		// TODO: for windows
 		return nil, fmt.Errorf("SSH agent support for Windows is not implemented")
 	}
 

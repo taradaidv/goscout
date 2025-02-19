@@ -27,7 +27,7 @@ func errorString(err error) string {
 	return ""
 }
 
-func Mount(sftpClient *sftp.Client) string {
+func Mount(sftpClient *sftp.Client) (string, net.Listener) {
 	fs := webdav.NewMemFS()
 	ls := webdav.NewMemLS()
 
@@ -36,20 +36,20 @@ func Mount(sftpClient *sftp.Client) string {
 		FileSystem: fs,
 		LockSystem: ls,
 		Logger: func(r *http.Request, err error) {
-			log.Println("Logger ::: ", r.Method, r.URL.Path, errorString(err))
+			//TODO: log.Println("Logger ::: ", r.Method, r.URL.Path, errorString(err))
 		},
 	}
 
 	serverReady := make(chan struct{})
-
 	var addr string
+	var listener net.Listener
 
 	go func() {
-		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		var err error
+		listener, err = net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			log.Fatalf("Error starting TCP listener: %v", err)
 		}
-		defer listener.Close()
 
 		addr = listener.Addr().String()
 
@@ -65,7 +65,7 @@ func Mount(sftpClient *sftp.Client) string {
 			switch r.Method {
 			case "PROPFIND":
 				if err := updateDirectory(fs, sftpClient, r.URL.Path); err != nil {
-					log.Printf("Failed to update directory: %v", err)
+					//TODO: log.Printf("Failed to update directory: %v", err)
 				}
 			case "GET":
 				if err := downloadFile(sftpClient, fs, r.URL.Path); err != nil {
@@ -99,12 +99,16 @@ func Mount(sftpClient *sftp.Client) string {
 
 		log.Printf("Server started %v", addr)
 		close(serverReady)
-		log.Fatal(http.Serve(listener, mux))
+
+		// Use http.Serve to handle graceful shutdown
+		if err := http.Serve(listener, mux); err != nil && !strings.Contains(err.Error(), "use of closed network connection") {
+			log.Printf("HTTP server error: %v", err)
+		}
 	}()
 
 	<-serverReady
 
-	return addr
+	return addr, listener
 }
 
 var locks = make(map[string]bool)
@@ -152,11 +156,11 @@ func updateDirectory(fs webdav.FileSystem, sftpClient *sftp.Client, path string)
 		relPath := filepath.Join(path, entry.Name())
 		if entry.IsDir() {
 			if isMacOS {
-				//TODO .metadata_never_index
+				//TODO: .metadata_never_index
 			}
 
 			if err := fs.Mkdir(context.Background(), relPath, os.FileMode(0755)); err != nil {
-				log.Printf("Error creating directory: %s - %s", err, relPath)
+				//TODO: log.Printf("Error creating directory: %s - %s", err, relPath)
 			}
 		} else {
 			dstFile, err := fs.OpenFile(context.Background(), relPath, os.O_RDWR|os.O_CREATE, os.FileMode(0644))

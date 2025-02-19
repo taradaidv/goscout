@@ -2,6 +2,7 @@ package ui
 
 import (
 	"goscout/internal/scoutssh"
+	"net"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -29,6 +30,8 @@ type UI struct {
 	logsLabel        *widget.Entry
 	connectionTab    *container.TabItem
 	bottomConnection *fyne.Container
+	webdavActive     bool
+	webdavListener   net.Listener // Add this field
 }
 
 type UIParams struct {
