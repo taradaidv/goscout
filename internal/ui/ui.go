@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"image/png"
 	"io"
+	"log"
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	"goscout/internal/scoutssh"
 	"goscout/internal/webdav"
@@ -169,6 +171,7 @@ func (ui *UI) connectToHost(host string) *container.TabItem {
 
 			split = container.NewHSplit(ui.components(params))
 			split.SetOffset(ui.cfg.SplitOffsets[host])
+			ui.trackSplitOffset(split, host)
 
 			ui.fyneTabs.Items[ui.fyneTabs.SelectedIndex()].Content = container.NewBorder(nil, nil, nil, nil, split)
 			ui.fyneTabs.Refresh()
@@ -184,11 +187,31 @@ func (ui *UI) connectToHost(host string) *container.TabItem {
 
 	split = container.NewHSplit(ui.components(params))
 	split.SetOffset(ui.cfg.SplitOffsets[host])
+	ui.trackSplitOffset(split, host)
 
 	remoteTab := container.NewTabItem(host, container.NewBorder(nil, nil, nil, nil, split))
 	ui.fyneTabs.Append(remoteTab)
 	ui.openTabs = append(ui.openTabs, host)
 	return remoteTab
+}
+func (ui *UI) trackSplitOffset(split *container.Split, host string) {
+	go func() {
+		ticker := time.NewTicker(1000 * time.Millisecond)
+		defer ticker.Stop()
+
+		var lastOffset float64
+		for range ticker.C {
+			currentOffset := split.Offset
+			if currentOffset != lastOffset {
+				lastOffset = currentOffset
+				ui.cfg.SplitOffsets[host] = currentOffset
+				err := SaveConfig(ui.cfg)
+				if err != nil {
+					log.Printf("Failed to save config: %v", err)
+				}
+			}
+		}
+	}()
 }
 
 func trimPath(path string) string {
