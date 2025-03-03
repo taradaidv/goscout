@@ -25,7 +25,7 @@ import (
 
 const (
 	repo       = "taradaidv/goscout"
-	ver        = "v0.3.1"
+	ver        = "v0.3.2"
 	configFile = ".goscout.json"
 )
 
@@ -42,6 +42,10 @@ func (ui *UI) SetHosts() {
 }
 
 func SetupWindow(fyneWindow fyne.Window, cfg *Config) {
+	if cfg.SplitOffsets == nil {
+		cfg.SplitOffsets = make(map[string]float64)
+	}
+
 	ui := &UI{
 		fyneWindow:       fyneWindow,
 		fyneSelect:       widget.NewSelect(nil, nil),
@@ -54,7 +58,7 @@ func SetupWindow(fyneWindow fyne.Window, cfg *Config) {
 		logsLabel:        widget.NewMultiLineEntry(),
 		connectionTab:    &container.TabItem{},
 		bottomConnection: &fyne.Container{},
-		webdavActive:     false, // Initialize the field
+		webdavActive:     false,
 	}
 
 	defer ui.fyneWindow.Close()
