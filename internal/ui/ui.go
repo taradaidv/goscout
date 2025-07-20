@@ -25,7 +25,7 @@ import (
 
 const (
 	repo       = "taradaidv/goscout"
-	ver        = "v0.3.2"
+	ver        = "v0.3.3"
 	configFile = ".goscout.json"
 )
 
