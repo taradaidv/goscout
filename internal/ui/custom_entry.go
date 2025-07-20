@@ -264,7 +264,29 @@ func actionSSHconfig(ui *UI, cfgFile string) *saveSSHconfig {
 func (e *saveSSHconfig) TypedShortcut(shortcut fyne.Shortcut) {
 	if sc, ok := shortcut.(*desktop.CustomShortcut); ok {
 		if sc.KeyName == fyne.KeyS && (sc.Modifier == fyne.KeyModifierControl || sc.Modifier == fyne.KeyModifierSuper) {
-			file, err := os.OpenFile(e.cfgFile, os.O_TRUNC|os.O_WRONLY, 0)
+			backupFile := fmt.Sprintf("%s_goscout_backup_%d", e.cfgFile, time.Now().Unix())
+
+			srcFile, err := os.Open(e.cfgFile)
+			if err != nil {
+				log.Fatal(err)
+				return
+			}
+			defer srcFile.Close()
+
+			dstFile, err := os.OpenFile(backupFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+			if err != nil {
+				log.Fatal(err)
+				return
+			}
+			defer dstFile.Close()
+
+			_, err = io.Copy(dstFile, srcFile)
+			if err != nil {
+				log.Fatal(err)
+				return
+			}
+
+			file, err := os.OpenFile(e.cfgFile, os.O_TRUNC|os.O_WRONLY, 0600)
 			if err != nil {
 				log.Fatal(err)
 				return
@@ -285,35 +307,26 @@ func (e *saveSSHconfig) TypedShortcut(shortcut fyne.Shortcut) {
 				layout.NewSpacer(),
 			)
 			dialog.ShowCustom("SSH config", "OK", content, e.ui.fyneWindow)
-
 		}
 	}
 	e.Entry.TypedShortcut(shortcut)
 }
 
 func (ui *UI) ToggleContent() {
-
 	if ui.sshConfigEditor == nil {
-		file, err := os.Open(filepath.Join(scoutssh.LocalHome, ".ssh", "config"))
+		filePath := filepath.Join(scoutssh.LocalHome, ".ssh", "config")
+		content, err := os.ReadFile(filePath)
 		if err != nil {
 			log.Fatal(err)
 		}
-		defer file.Close()
 
-		buffer := make([]byte, 1024)
-		n, err := file.Read(buffer)
-		if err != nil && err != io.EOF {
-			log.Fatalln("EOF", err)
-		}
-
-		ui.sshConfigEditor = actionSSHconfig(ui, file.Name())
-		ui.sshConfigEditor.SetText(string(buffer[:n]))
+		ui.sshConfigEditor = actionSSHconfig(ui, filePath)
+		ui.sshConfigEditor.SetText(string(content))
 		ui.connectionTab.Content = container.NewBorder(container.NewVBox(ui.fyneSelect), nil, nil, nil, container.NewVScroll(ui.sshConfigEditor))
 	} else {
 		ui.sshConfigEditor = nil
 		ui.connectionTab.Content = container.NewBorder(container.NewVBox(ui.fyneSelect), ui.bottomConnection, nil, nil, container.NewVScroll(ui.logsLabel))
 	}
-
 }
 
 func fetchResponseBody(webEntry string) (*http.Response, error) {
